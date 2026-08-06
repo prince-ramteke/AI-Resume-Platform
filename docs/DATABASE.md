@@ -107,6 +107,7 @@ CREATE TABLE analyses (
     weak_skills          JSONB NOT NULL DEFAULT '[]',
     recommendations      JSONB NOT NULL DEFAULT '[]',
     evidence             JSONB NOT NULL DEFAULT '[]',
+    summary              VARCHAR(500),            -- one-line human-readable verdict
     provider             VARCHAR(20) NOT NULL,   -- ollama | openai
     latency_ms           INT,
     created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -160,3 +161,5 @@ Stored on `analyses` so the verdict stays flexible without extra tables.
 - Cap top-k retrieval (e.g., k=5–8) to bound LLM prompt size.
 - Cache embeddings: before embedding a document, check whether chunks already exist for `(source_type, source_id)`; skip if so.
 - Paginate all list endpoints (resumes, JDs, analyses) — never unbounded `findAll`.
+- **Chunk cleanup on document delete:** `document_chunks` uses a polymorphic `(source_type, source_id)` reference, so there is no hard FK cascade. The service layer must delete all chunks for a document *before* (or in the same transaction as) deleting the document itself. A scheduled cleanup job may run as a safety net to remove orphaned chunks.
+- **Immutable-document design:** resumes and JDs are treated as immutable after upload. "Editing" means uploading a new version — this avoids invalidating cached embeddings.

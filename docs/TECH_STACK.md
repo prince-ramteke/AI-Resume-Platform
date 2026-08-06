@@ -43,7 +43,7 @@
 - **React + Vite + TypeScript** — fast dev, typed, hireable stack.
 - **Axios** — typed API client layer.
 - **React Router** — protected routing.
-- **Tailwind CSS** (or MUI — pick one) — quick, consistent, clean UI.
+- **Tailwind CSS** — utility-first, small bundle, no component-library lock-in. Chosen over MUI for its lighter footprint and closer-to-CSS mental model.
 - **Vitest + React Testing Library** — frontend tests.
 
 ## 8. Ops

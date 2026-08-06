@@ -53,7 +53,7 @@ public record AnalyzeRequest(@NotNull @Positive Long resumeId,
 
 ## 8. AI-layer specifics
 - All model access via `LlmClient`/`EmbeddingClient`. No feature imports Ollama/OpenAI SDK directly.
-- Prompts live in a dedicated, reviewable place (constants/templates), not inline scattered strings.
+- Prompts live in `backend/src/main/resources/prompts/` as `.txt` or `.mustache` template files, loaded at startup. Never inline prompt strings in Java code.
 - Always validate model output before use. Never trust free text.
 
 ## 9. Testing conventions

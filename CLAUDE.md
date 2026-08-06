@@ -33,7 +33,7 @@ If you are about to make a design decision, check whether one of those documents
 
 **Frontend**
 - React (Vite) + TypeScript
-- Axios for API calls, React Router, a component library kept minimal (Tailwind or MUI — pick one, stay consistent)
+- Axios for API calls, React Router, Tailwind CSS for styling
 
 **Infra / tooling**
 - Docker + Docker Compose (Postgres/PGVector, Ollama, backend, frontend)

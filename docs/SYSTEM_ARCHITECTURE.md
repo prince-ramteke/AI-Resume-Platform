@@ -87,24 +87,25 @@ This is the heart of the system. When a user requests an analysis of `resumeId` 
    upsert chunks + vectors into DocumentChunk (PGVector)
    (cache: if a doc's chunks already embedded, skip re-embedding)
 
-4. EXTRACT JD REQUIREMENTS
-   LLM (or rule pass) turns JD chunks into a list of discrete requirements/skills
-
-5. RETRIEVE EVIDENCE
-   for each requirement: vector-search the RESUME chunks (top-k) for supporting evidence
+4. RETRIEVE EVIDENCE
+   vector-search RESUME chunks (top-k, cosine, k ≤ 8) using the full JD text as the query
+   filter: source_type = 'RESUME' (JD text is NOT embedded in v1 — it is used only as the query)
    (v1.1: hybrid = vector + keyword, then re-rank)
 
-6. SYNTHESIZE
-   assemble prompt: system instructions + JD requirements + retrieved resume evidence
+5. SYNTHESIZE (single-pass LLM call)
+   assemble prompt: system instructions + full JD text + retrieved resume evidence chunks
    LlmClient.complete(prompt) -> JSON verdict
-   {score, matchedSkills[], missingSkills[], weakSkills[], recommendations[], evidence[]}
+   the model extracts JD requirements AND scores the resume in one call
+   {score, summary, matchedSkills[], missingSkills[], weakSkills[], recommendations[], evidence[]}
+   (v1 uses a single LLM call to stay within the 5 s p95 budget; a two-pass
+    extract-then-score pipeline may be explored in v1.1 if quality warrants it)
 
-7. VALIDATE & GROUND
+6. VALIDATE & GROUND
    parse JSON -> typed object; validate against schema
    drop any claim whose evidence ref doesn't resolve to a real retrieved chunk
    on malformed output: one repair retry with a stricter instruction, else safe error
 
-8. PERSIST & RETURN
+7. PERSIST & RETURN
    save Analysis (with provider + latencyMs); map to AnalysisResponse DTO
 ```
 
@@ -112,6 +113,9 @@ This is the heart of the system. When a user requests an analysis of `resumeId` 
 - **Grounding over generation** — the model synthesizes over retrieved evidence; it isn't asked to "remember" the resume.
 - **Structured output** — a fixed JSON contract, validated, never free text.
 - **Idempotent embedding** — embeddings cached per document to keep p95 latency down.
+- **Single-pass LLM** — one model call per analysis in v1, keeping total latency under the 5 s p95 target.
+- **No JD embedding in v1** — the JD is used as the vector-search query, not stored as chunks. JD embedding may be added in v1.1 if cross-analysis similarity search is needed.
+- **Token budget** — prompt assembly enforces a hard token cap (model context window minus reserved output tokens). If retrieved chunks exceed the budget, the lowest-ranked chunks are dropped. The budget constant lives in application config (`LLM_MAX_PROMPT_TOKENS`).
 
 ---
 
@@ -133,6 +137,8 @@ public interface EmbeddingClient {
 - `OllamaLlmClient` is the default. `OpenAiLlmClient` is the fallback.
 - A `ResilientLlmClient` decorator wraps the primary and, on timeout/error (and if `LLM_FALLBACK_ENABLED=true`), retries via the fallback.
 - Provider chosen by config: `LLM_PROVIDER=ollama|openai`. Tests inject a `FakeLlmClient` returning canned JSON — no network in unit tests.
+- **Deterministic scoring:** set `LLM_TEMPERATURE=0.0` and `LLM_SEED=42` (env vars) so the same input produces repeatable scores across runs. Both values are passed through to the provider via `LlmRequest`.
+- **Spring AI boundary:** `LlmClient`/`EmbeddingClient` are the application's own interfaces — they define the contract the rest of the app codes against. Spring AI is an *implementation detail* used inside `OllamaLlmClient`/`OpenAiLlmClient` to talk to providers. Feature packages never import Spring AI types directly.
 - **Why this matters (interview point):** the rest of the app is provider-agnostic. Swapping models is a config change, not a code change. This is the single most important design decision in the project.
 
 ---
@@ -165,7 +171,7 @@ Client → POST /api/analyses {resumeId, jobDescriptionId}  (JWT)
      → AnalysisService (ownership check)
         → RagService.analyze(resume, jd)   // section 4 pipeline
      → persist Analysis
-  ← 200 AnalysisResponse {score, matched[], missing[], weak[], recommendations[], evidence[], provider}
+  ← 201 AnalysisResponse {score, summary, matched[], missing[], weak[], recommendations[], evidence[], provider}
 ```
 
 Full request/response schemas live in `API.md`.

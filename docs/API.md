@@ -28,7 +28,7 @@
 |---|---|
 | 400 | Validation / bad input |
 | 401 | Missing/invalid/expired JWT |
-| 403 | Authenticated but not allowed (RBAC / not owner) |
+| 403 | Authenticated but not allowed (RBAC — admin routes only) |
 | 404 | Resource not found |
 | 409 | Conflict (e.g., email already registered) |
 | 413 | File too large |
@@ -77,7 +77,7 @@ Paginated list of the caller's resumes. `200 Page<ResumeSummary>` where
 `ResumeSummary = { id, filename, createdAt }`.
 
 ### GET /api/resumes/{id}
-`200 { id, filename, rawText, createdAt }` · `403` if not owner · `404` if missing.
+`200 { id, filename, rawText, createdAt }` · `404` if missing or not owner.
 
 ### DELETE /api/resumes/{id}
 `204` · cascades to its chunks.
@@ -111,7 +111,7 @@ As per resumes.
 { "resumeId": 12, "jobDescriptionId": 7 }
 ```
 ```json
-// 200 AnalysisResponse
+// 201 AnalysisResponse
 {
   "id": 55,
   "score": 78,
@@ -141,14 +141,14 @@ As per resumes.
   "latencyMs": 4120,
   "createdAt": "2026-08-05T10:20:00Z"
 }
-// 403 if caller doesn't own resume or JD · 422 if LLM output unusable
+// 404 if caller doesn't own resume or JD · 422 if LLM output unusable
 ```
 
 ### GET /api/analyses
 Paginated history. `200 Page<{ id, score, jobTitle, createdAt }>`.
 
 ### GET /api/analyses/{id}
-Full `AnalysisResponse`. `403`/`404` as usual.
+Full `AnalysisResponse`. `404` if missing or not owner.
 
 ---
 
