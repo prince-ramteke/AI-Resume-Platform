@@ -27,7 +27,10 @@ Roles: **USER** (default) and **ADMIN**.
 | `/api/resumes/**`, `/api/job-descriptions/**`, `/api/analyses/**` | Authenticated (USER or ADMIN) |
 | `/api/admin/**` | ADMIN only (`@PreAuthorize("hasRole('ADMIN')")`) |
 
-**Ownership checks** are enforced in the service layer beyond role checks: a USER can only read/delete resumes, JDs, and analyses whose `user_id` matches their token. Requesting someone else's resource → `403`, not `404` leak of existence... (return `404` when you must not reveal existence; `403` when ownership is the issue — pick per endpoint and document it).
+**Ownership checks** are enforced in the service layer beyond role checks: a USER can only read/delete resumes, JDs, and analyses whose `user_id` matches their token. Requesting a resource that doesn't exist **or** that belongs to another user → **`404`** (not `403`). This prevents enumeration attacks — an attacker cannot distinguish "exists but not mine" from "does not exist."
+
+### Admin bootstrap
+The first ADMIN account is seeded by a **Flyway migration** (`V3__seed_admin.sql`) that inserts a row only if no ADMIN exists. Credentials come from env vars `ADMIN_EMAIL` and `ADMIN_PASSWORD` (BCrypt-hashed at migration time via a PL/pgSQL `crypt()` call with the `pgcrypto` extension, or pre-hashed in the env var). These env vars are required in Docker/CI; the migration is a no-op if an ADMIN already exists. Additional admins are created via `POST /api/admin/users` (ADMIN-only) — never by editing the DB.
 
 ---
 

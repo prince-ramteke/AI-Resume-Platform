@@ -1,0 +1,68 @@
+spring:
+  application:
+    name: resume-ai
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/resumeai}
+    username: ${DB_USER:resumeai}
+    password: ${DB_PASSWORD:change_me}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+app:
+  cors:
+    allowed-origins: ${FRONTEND_ORIGIN:http://localhost:5173}
+  jwt:
+    secret: ${JWT_SECRET:dev-secret-replace-in-production-min-256-bits-long-string}
+    expiry-minutes: ${JWT_EXPIRY_MINUTES:60}
+  storage:
+    path: ${STORAGE_PATH:./uploads}
+  rag:
+    chunk-size: ${RAG_CHUNK_SIZE:500}
+    chunk-overlap: ${RAG_CHUNK_OVERLAP:50}
+    retrieval-top-k: ${RAG_RETRIEVAL_TOP_K:8}
+    max-prompt-tokens: ${LLM_MAX_PROMPT_TOKENS:3500}
+  embedding:
+    provider: ${EMBEDDING_PROVIDER:ollama}
+    dimensions: ${EMBEDDING_DIMENSIONS:768}
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      model: ${OLLAMA_EMBED_MODEL:nomic-embed-text}
+    openai:
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      model: ${OPENAI_EMBED_MODEL:text-embedding-3-small}
+      api-key: ${OPENAI_API_KEY:}

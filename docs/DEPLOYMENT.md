@@ -37,6 +37,13 @@ OLLAMA_CHAT_MODEL=llama3.1:8b
 OLLAMA_EMBED_MODEL=nomic-embed-text
 OPENAI_API_KEY=               # optional, only if fallback/openai used
 OPENAI_CHAT_MODEL=gpt-4o-mini
+LLM_TEMPERATURE=0.0
+LLM_SEED=42
+LLM_MAX_PROMPT_TOKENS=3500
+
+# Admin bootstrap
+ADMIN_EMAIL=admin@resumeai.local
+ADMIN_PASSWORD=$2a$10$...      # pre-hashed BCrypt
 
 # Frontend
 FRONTEND_ORIGIN=http://localhost:5173

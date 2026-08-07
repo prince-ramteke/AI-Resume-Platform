@@ -28,7 +28,7 @@
 |---|---|
 | 400 | Validation / bad input |
 | 401 | Missing/invalid/expired JWT |
-| 403 | Authenticated but not allowed (RBAC / not owner) |
+| 403 | Authenticated but not allowed (RBAC — admin routes only) |
 | 404 | Resource not found |
 | 409 | Conflict (e.g., email already registered) |
 | 413 | File too large |
@@ -64,42 +64,117 @@ Returns the current user. `200 { id, email, role }`.
 
 ## 3. Resumes
 
+All resume endpoints require authentication. Ownership is enforced — non-owners receive `404` (not `403`) to prevent enumeration. Admins (`ROLE_ADMIN`) can access any resume.
+
 ### POST /api/resumes
-`multipart/form-data`, field `file` (PDF/DOCX, ≤10 MB).
+`multipart/form-data`, field `file` (PDF/DOCX, ≤10 MB). Validates content-type, file extension, magic bytes, and size. Extracts text via Apache Tika and stores the file locally.
 ```json
-// 201
-{ "id": 12, "filename": "prince_resume.pdf", "createdAt": "..." }
-// 400 wrong type · 413 too large
+// 201 UploadResumeResponse
+{ "id": 12, "filename": "prince_resume.pdf", "contentType": "application/pdf",
+  "fileSize": 52340, "createdAt": "2026-08-07T10:00:00Z" }
+// 400 wrong type / empty / corrupted / password-protected
+// 413 too large (>10 MB)
 ```
 
 ### GET /api/resumes
-Paginated list of the caller's resumes. `200 Page<ResumeSummary>` where
-`ResumeSummary = { id, filename, createdAt }`.
+Paginated list of the caller's resumes (soft-deleted excluded). `200 Page<ResumeSummaryResponse>` where
+`ResumeSummaryResponse = { id, filename, contentType, fileSize, createdAt }`.
+Default sort: `createdAt`, default page size: `20`.
 
 ### GET /api/resumes/{id}
-`200 { id, filename, rawText, createdAt }` · `403` if not owner · `404` if missing.
+Full resume detail including extracted text. `200 ResumeResponse`:
+```json
+{ "id": 12, "filename": "prince_resume.pdf", "contentType": "application/pdf",
+  "fileSize": 52340, "rawText": "Prince Ramteke\nSoftware Engineer...",
+  "pageCount": 2, "language": "en",
+  "createdAt": "2026-08-07T10:00:00Z", "updatedAt": null }
+```
+`404` if missing, soft-deleted, or not owner.
+
+### PUT /api/resumes/{id}
+`multipart/form-data`, field `file` (PDF/DOCX, ≤10 MB). Replaces the resume file, re-extracts text, deletes old file from storage.
+```json
+// 200 UploadResumeResponse
+{ "id": 12, "filename": "updated_resume.pdf", "contentType": "application/pdf",
+  "fileSize": 61024, "createdAt": "2026-08-07T10:00:00Z" }
+// 400 / 413 same as POST · 404 if missing or not owner
+```
 
 ### DELETE /api/resumes/{id}
-`204` · cascades to its chunks.
+Soft-delete. `204 No Content`. The resume is excluded from queries but remains in the database.
+`404` if missing or not owner.
+
+### GET /api/resumes/{id}/download
+Downloads the original uploaded file. Returns the binary content with:
+- `Content-Type`: the original file's MIME type
+- `Content-Disposition: attachment; filename="<original_filename>"`
+`404` if missing or not owner.
 
 ---
 
-## 4. Job descriptions
+## 4. Job Descriptions
+
+All job-description endpoints require authentication. Ownership is enforced — non-owners receive `404` (not `403`) to prevent enumeration. Admins (`ROLE_ADMIN`) can access any job description.
+
+Two creation modes: **text-paste** (JSON body) and **file upload** (multipart, PDF/DOCX/TXT ≤10 MB).
 
 ### POST /api/job-descriptions
+Create from pasted text (JSON body).
 ```json
-// request (paste)
+// request
 { "title": "Java Backend Engineer", "rawText": "We are looking for..." }
-// or multipart file upload (same as resumes)
-// 201
-{ "id": 7, "title": "Java Backend Engineer", "createdAt": "..." }
+// 201 JobDescriptionResponse
+{ "id": 7, "title": "Java Backend Engineer", "rawText": "We are looking for...",
+  "contentType": null, "fileSize": null, "pageCount": null, "language": null,
+  "createdAt": "2026-08-07T10:00:00Z", "updatedAt": null }
+// 400 blank title or rawText
+```
+
+### POST /api/job-descriptions/upload
+Create from uploaded file (`multipart/form-data`). Fields: `file` (PDF/DOCX/TXT, ≤10 MB), `title` (string, ≤255). Validates extension, content-type, magic bytes (skipped for TXT), and size. TXT files are read directly as UTF-8; PDF/DOCX are extracted via Apache Tika.
+```json
+// 201 JobDescriptionResponse
+{ "id": 8, "title": "Backend Role", "rawText": "extracted text...",
+  "contentType": "application/pdf", "fileSize": 52340, "pageCount": 2, "language": "en",
+  "createdAt": "2026-08-07T10:00:00Z", "updatedAt": null }
+// 400 wrong type / empty / corrupted
+// 413 too large (>10 MB)
 ```
 
 ### GET /api/job-descriptions
-Paginated list. `200 Page<{ id, title, createdAt }>`.
+Paginated list of the caller's job descriptions (soft-deleted excluded). Optional `?search=` query filters by title (case-insensitive contains). `200 Page<JobDescriptionSummaryResponse>`:
+`JobDescriptionSummaryResponse = { id, title, contentType, fileSize, createdAt }`.
+Default sort: `createdAt`, default page size: `20`.
 
-### GET /api/job-descriptions/{id} · DELETE /api/job-descriptions/{id}
-As per resumes.
+### GET /api/job-descriptions/{id}
+Full detail including raw text. `200 JobDescriptionResponse`:
+```json
+{ "id": 7, "title": "Java Backend Engineer", "rawText": "We are looking for...",
+  "contentType": null, "fileSize": null, "pageCount": null, "language": null,
+  "createdAt": "2026-08-07T10:00:00Z", "updatedAt": null }
+```
+`404` if missing, soft-deleted, or not owner.
+
+### PUT /api/job-descriptions/{id}
+Update title and raw text (JSON body).
+```json
+// request
+{ "title": "Updated Title", "rawText": "Updated description..." }
+// 200 JobDescriptionResponse
+{ "id": 7, "title": "Updated Title", "rawText": "Updated description...",
+  "contentType": null, "fileSize": null, "pageCount": null, "language": null,
+  "createdAt": "2026-08-07T10:00:00Z", "updatedAt": "2026-08-07T11:00:00Z" }
+// 400 blank title or rawText · 404 if missing or not owner
+```
+
+### DELETE /api/job-descriptions/{id}
+Soft-delete. `204 No Content`. `404` if missing or not owner.
+
+### GET /api/job-descriptions/{id}/download
+Downloads the original uploaded file (file-based JDs only). Returns binary content with:
+- `Content-Type`: the original file's MIME type
+- `Content-Disposition: attachment; filename="<title>"`
+`404` if missing, not owner, or the JD was created via text-paste (no file to download).
 
 ---
 
@@ -111,7 +186,7 @@ As per resumes.
 { "resumeId": 12, "jobDescriptionId": 7 }
 ```
 ```json
-// 200 AnalysisResponse
+// 201 AnalysisResponse
 {
   "id": 55,
   "score": 78,
@@ -141,14 +216,14 @@ As per resumes.
   "latencyMs": 4120,
   "createdAt": "2026-08-05T10:20:00Z"
 }
-// 403 if caller doesn't own resume or JD · 422 if LLM output unusable
+// 404 if caller doesn't own resume or JD · 422 if LLM output unusable
 ```
 
 ### GET /api/analyses
 Paginated history. `200 Page<{ id, score, jobTitle, createdAt }>`.
 
 ### GET /api/analyses/{id}
-Full `AnalysisResponse`. `403`/`404` as usual.
+Full `AnalysisResponse`. `404` if missing or not owner.
 
 ---
 
@@ -171,7 +246,8 @@ Public liveness/readiness (DB + Ollama reachability).
 | resumeId / jobDescriptionId | not null, positive |
 | JD title | not blank, ≤255 |
 | JD rawText | not blank when no file, ≤50k chars |
-| uploaded file | PDF/DOCX, ≤10 MB (validated before parsing) |
+| uploaded file (resume) | PDF/DOCX, ≤10 MB (validated before parsing) |
+| uploaded file (JD)     | PDF/DOCX/TXT, ≤10 MB (validated before parsing) |
 
 All violations → `400` via the global handler with field-level messages.
 

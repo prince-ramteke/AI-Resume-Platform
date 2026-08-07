@@ -18,7 +18,7 @@ Always-on constraints for the React app.
 - Never store secrets in the frontend; the bundle is public.
 
 ## UI scope (v1)
-Auth (register/login), resume upload, JD input, run-analysis, results (score gauge + skill chips + ranked recommendations + expandable evidence), history list/detail. Keep styling consistent (one system: Tailwind or MUI).
+Auth (register/login), resume upload, JD input, run-analysis, results (score gauge + skill chips + ranked recommendations + expandable evidence), history list/detail. Styling: **Tailwind CSS** (decided — do not use MUI).
 
 ## Work that belongs here
 React pages/components, forms, client state, routing, the typed API layer, styling/theming, loading/empty/error states, accessibility.

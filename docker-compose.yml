@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: resumeai
+      POSTGRES_USER: ${DB_USER:-resumeai}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-resumeai}"]
+      interval: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+
+  backend:
+    build: ./backend
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_URL: jdbc:postgresql://postgres:5432/resumeai
+      DB_USER: ${DB_USER:-resumeai}
+      DB_PASSWORD: ${DB_PASSWORD:-change_me}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-replace-in-production-min-256-bits-long-string}
+      OLLAMA_BASE_URL: http://ollama:11434
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      FRONTEND_ORIGIN: http://localhost:5173
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  ollama:
