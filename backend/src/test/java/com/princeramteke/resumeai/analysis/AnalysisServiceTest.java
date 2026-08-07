@@ -1,0 +1,323 @@
+package com.princeramteke.resumeai.analysis;
+
+import com.princeramteke.resumeai.analysis.dto.AnalysisRequest;
+import com.princeramteke.resumeai.analysis.dto.AnalysisResponse;
+import com.princeramteke.resumeai.analysis.dto.AnalysisSummaryResponse;
+import com.princeramteke.resumeai.analysis.exception.AnalysisFailedException;
+import com.princeramteke.resumeai.analysis.exception.AnalysisNotFoundException;
+import com.princeramteke.resumeai.analysis.mapper.AnalysisMapper;
+import com.princeramteke.resumeai.analysis.model.Evidence;
+import com.princeramteke.resumeai.analysis.model.Recommendation;
+import com.princeramteke.resumeai.analysis.model.SkillClaim;
+import com.princeramteke.resumeai.analysis.synthesis.AnalysisPromptFactory;
+import com.princeramteke.resumeai.analysis.synthesis.OutputValidator;
+import com.princeramteke.resumeai.analysis.synthesis.VerdictParser;
+import com.princeramteke.resumeai.auth.User;
+import com.princeramteke.resumeai.jobdescription.JobDescription;
+import com.princeramteke.resumeai.jobdescription.JobDescriptionRepository;
+import com.princeramteke.resumeai.jobdescription.exception.JobDescriptionNotFoundException;
+import com.princeramteke.resumeai.llm.FakeLlmClient;
+import com.princeramteke.resumeai.llm.LlmClient;
+import com.princeramteke.resumeai.llm.exception.LlmException;
+import com.princeramteke.resumeai.rag.RagConfig;
+import com.princeramteke.resumeai.rag.chunk.SourceType;
+import com.princeramteke.resumeai.rag.chunking.TextChunker;
+import com.princeramteke.resumeai.rag.ingestion.IngestionService;
+import com.princeramteke.resumeai.rag.prompt.PromptAssembler;
+import com.princeramteke.resumeai.rag.retrieval.ChunkEvidence;
+import com.princeramteke.resumeai.rag.retrieval.RetrievalService;
+import com.princeramteke.resumeai.resume.Resume;
+import com.princeramteke.resumeai.resume.ResumeRepository;
+import com.princeramteke.resumeai.resume.exception.ResumeNotFoundException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class AnalysisServiceTest {
+
+    private static final long USER_ID = 1L;
+    private static final long RESUME_ID = 12L;
+    private static final long JD_ID = 7L;
+    private static final String RESUME_TEXT = "Java Spring Boot developer, built REST APIs";
+    private static final String JD_TEXT = "We need AWS experience.";
+
+    private static final String VALID_VERDICT = """
+            {
+              "score": 75,
+              "summary": "Strong backend match, missing cloud",
+              "matchedSkills": [{"skill":"Spring Boot","importance":"HIGH","evidenceRef":"RESUME#0"}],
+              "missingSkills": [{"skill":"AWS","importance":"HIGH","evidenceRef":"JD#0"}],
+              "weakSkills": [],
+              "recommendations": [{"text":"Add AWS","impact":"HIGH","reason":"JD requires AWS"}]
+            }
+            """;
+
+    @Mock private ResumeRepository resumeRepository;
+    @Mock private JobDescriptionRepository jobDescriptionRepository;
+    @Mock private AnalysisRepository analysisRepository;
+    @Mock private IngestionService ingestionService;
+    @Mock private RetrievalService retrievalService;
+
+    private TextChunker textChunker;
+    private AnalysisPromptFactory promptFactory;
+    private VerdictParser verdictParser;
+    private OutputValidator outputValidator;
+    private AnalysisMapper mapper;
+
+    @BeforeEach
+    void setUp() {
+        RagConfig ragConfig = new RagConfig(500, 50, 8, 3500);
+        textChunker = new TextChunker(ragConfig);
+        promptFactory = new AnalysisPromptFactory(new PromptAssembler(ragConfig));
+        verdictParser = new VerdictParser();
+        outputValidator = new OutputValidator();
+        mapper = org.mapstruct.factory.Mappers.getMapper(AnalysisMapper.class);
+    }
+
+    private AnalysisService service(LlmClient llm) {
+        return new AnalysisService(resumeRepository, jobDescriptionRepository, analysisRepository,
+                ingestionService, retrievalService, textChunker, promptFactory, llm,
+                verdictParser, outputValidator, mapper);
+    }
+
+    private Resume resume() {
+        User user = new User("prince@example.com", "hash");
+        Resume resume = new Resume(user, "resume.pdf", "application/pdf", 1000L,
+                "/path/resume.pdf", RESUME_TEXT, 1, "en");
+        ReflectionTestUtils.setField(resume, "id", RESUME_ID);
+        return resume;
+    }
+
+    private JobDescription jobDescription() {
+        JobDescription jd = new JobDescription(new User("prince@example.com", "hash"),
+                "Backend Engineer", JD_TEXT);
+        ReflectionTestUtils.setField(jd, "id", JD_ID);
+        return jd;
+    }
+
+    private void stubOwnedResumeAndJd() {
+        when(resumeRepository.findByIdAndUserIdAndDeletedFalse(RESUME_ID, USER_ID))
+                .thenReturn(Optional.of(resume()));
+        when(jobDescriptionRepository.findByIdAndUserIdAndDeletedFalse(JD_ID, USER_ID))
+                .thenReturn(Optional.of(jobDescription()));
+    }
+
+    private void stubRetrieval() {
+        when(retrievalService.retrieve(SourceType.RESUME, RESUME_ID, JD_TEXT))
+                .thenReturn(List.of(new ChunkEvidence(
+                        "RESUME#0", SourceType.RESUME, 0, "Built REST APIs with Spring Boot", 0.9)));
+    }
+
+    private void stubSaveReturnsArgument() {
+        when(analysisRepository.save(any(Analysis.class))).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    private AnalysisRequest request() {
+        return new AnalysisRequest(RESUME_ID, JD_ID);
+    }
+
+    @Test
+    void analyze_happyPath_runsPipelineAndReturnsGroundedResponse() {
+        stubOwnedResumeAndJd();
+        stubRetrieval();
+        stubSaveReturnsArgument();
+
+        AnalysisResponse response = service(new FakeLlmClient(VALID_VERDICT)).analyze(request(), USER_ID);
+
+        assertThat(response.score()).isEqualTo(75);
+        assertThat(response.summary()).isEqualTo("Strong backend match, missing cloud");
+        assertThat(response.matchedSkills()).singleElement()
+                .satisfies(s -> assertThat(s.evidenceRef()).isEqualTo("RESUME#0"));
+        assertThat(response.missingSkills()).singleElement()
+                .satisfies(s -> assertThat(s.evidenceRef()).isEqualTo("JD#0"));
+        assertThat(response.recommendations()).hasSize(1);
+        assertThat(response.evidence()).extracting(e -> e.ref())
+                .containsExactlyInAnyOrder("RESUME#0", "JD#0");
+
+        verify(ingestionService).ingest(SourceType.RESUME, RESUME_ID, RESUME_TEXT);
+        verify(retrievalService).retrieve(SourceType.RESUME, RESUME_ID, JD_TEXT);
+    }
+
+    @Test
+    void analyze_resumeNotFound_throwsAndStopsPipeline() {
+        when(resumeRepository.findByIdAndUserIdAndDeletedFalse(RESUME_ID, USER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service(new FakeLlmClient(VALID_VERDICT)).analyze(request(), USER_ID))
+                .isInstanceOf(ResumeNotFoundException.class);
+
+        verify(jobDescriptionRepository, never()).findByIdAndUserIdAndDeletedFalse(any(), any());
+        verify(ingestionService, never()).ingest(any(), any(), any());
+    }
+
+    @Test
+    void analyze_jobDescriptionNotFound_throws() {
+        when(resumeRepository.findByIdAndUserIdAndDeletedFalse(RESUME_ID, USER_ID))
+                .thenReturn(Optional.of(resume()));
+        when(jobDescriptionRepository.findByIdAndUserIdAndDeletedFalse(JD_ID, USER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service(new FakeLlmClient(VALID_VERDICT)).analyze(request(), USER_ID))
+                .isInstanceOf(JobDescriptionNotFoundException.class);
+
+        verify(ingestionService, never()).ingest(any(), any(), any());
+    }
+
+    @Test
+    void analyze_resumeOwnedByAnotherUser_throwsNotFound() {
+        // ownership model: a resource not owned by the caller is invisible (userId-scoped finder) -> 404
+        when(resumeRepository.findByIdAndUserIdAndDeletedFalse(RESUME_ID, USER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service(new FakeLlmClient(VALID_VERDICT)).analyze(request(), USER_ID))
+                .isInstanceOf(ResumeNotFoundException.class);
+    }
+
+    @Test
+    void analyze_unusableVerdictAfterRetry_throwsAnalysisFailedAndDoesNotPersist() {
+        stubOwnedResumeAndJd();
+        stubRetrieval();
+
+        assertThatThrownBy(() ->
+                service(new FakeLlmClient("this is not json")).analyze(request(), USER_ID))
+                .isInstanceOf(AnalysisFailedException.class)
+                .hasMessageContaining("after one repair retry");
+
+        verify(analysisRepository, never()).save(any());
+    }
+
+    @Test
+    void analyze_persistenceFailure_propagates() {
+        stubOwnedResumeAndJd();
+        stubRetrieval();
+        when(analysisRepository.save(any(Analysis.class)))
+                .thenThrow(new RuntimeException("database unavailable"));
+
+        assertThatThrownBy(() -> service(new FakeLlmClient(VALID_VERDICT)).analyze(request(), USER_ID))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("database unavailable");
+    }
+
+    @Test
+    void analyze_providerException_propagatesAndDoesNotPersist() {
+        stubOwnedResumeAndJd();
+        stubRetrieval();
+        LlmClient failing = mock(LlmClient.class);
+        when(failing.complete(any())).thenThrow(new LlmException("provider unreachable"));
+
+        assertThatThrownBy(() -> service(failing).analyze(request(), USER_ID))
+                .isInstanceOf(LlmException.class);
+
+        verify(analysisRepository, never()).save(any());
+    }
+
+    @Test
+    void analyze_groundingRemovesDanglingEvidenceReferences() {
+        stubOwnedResumeAndJd();
+        stubRetrieval();
+        stubSaveReturnsArgument();
+        String verdictWithDanglingRef = """
+                {
+                  "score": 70,
+                  "summary": "match",
+                  "matchedSkills": [
+                    {"skill":"Spring Boot","importance":"HIGH","evidenceRef":"RESUME#0"},
+                    {"skill":"Hallucinated","importance":"HIGH","evidenceRef":"RESUME#88"}
+                  ],
+                  "missingSkills": [],
+                  "weakSkills": [],
+                  "recommendations": []
+                }
+                """;
+
+        AnalysisResponse response =
+                service(new FakeLlmClient(verdictWithDanglingRef)).analyze(request(), USER_ID);
+
+        assertThat(response.matchedSkills()).singleElement()
+                .satisfies(s -> assertThat(s.skill()).isEqualTo("Spring Boot"));
+        assertThat(response.evidence()).extracting(e -> e.ref()).containsExactly("RESUME#0");
+    }
+
+    @Test
+    void analyze_recordsLatency() {
+        stubOwnedResumeAndJd();
+        stubRetrieval();
+        ArgumentCaptor<Analysis> captor = ArgumentCaptor.forClass(Analysis.class);
+        when(analysisRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        service(new FakeLlmClient(VALID_VERDICT)).analyze(request(), USER_ID);
+
+        assertThat(captor.getValue().getLatencyMs()).isNotNull().isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    void analyze_persistsProviderName() {
+        stubOwnedResumeAndJd();
+        stubRetrieval();
+        ArgumentCaptor<Analysis> captor = ArgumentCaptor.forClass(Analysis.class);
+        when(analysisRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        AnalysisResponse response = service(new FakeLlmClient(VALID_VERDICT)).analyze(request(), USER_ID);
+
+        assertThat(captor.getValue().getProvider()).isEqualTo("fake");
+        assertThat(response.provider()).isEqualTo("fake");
+    }
+
+    @Test
+    void getAnalysis_notOwned_throwsNotFound() {
+        when(analysisRepository.findByIdAndUserId(55L, USER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service(new FakeLlmClient(VALID_VERDICT)).getAnalysis(55L, USER_ID, false))
+                .isInstanceOf(AnalysisNotFoundException.class);
+    }
+
+    @Test
+    void getAnalysis_adminCanReadAnyAnalysis() {
+        Analysis analysis = new Analysis(new User("a@b.com", "h"), resume(), jobDescription(),
+                80, "ok", List.of(new SkillClaim("Java", "HIGH", "RESUME#0")),
+                List.of(), List.of(), List.of(new Recommendation("t", "LOW", "r")),
+                List.of(new Evidence("RESUME#0", SourceType.RESUME, 0, "snippet")), "ollama", 100);
+        when(analysisRepository.findById(55L)).thenReturn(Optional.of(analysis));
+
+        AnalysisResponse response = service(new FakeLlmClient(VALID_VERDICT)).getAnalysis(55L, USER_ID, true);
+
+        assertThat(response.score()).isEqualTo(80);
+        assertThat(response.matchedSkills()).singleElement()
+                .satisfies(s -> assertThat(s.skill()).isEqualTo("Java"));
+    }
+
+    @Test
+    void listAnalyses_mapsSummariesWithJobTitle() {
+        Analysis analysis = new Analysis(new User("a@b.com", "h"), resume(), jobDescription(),
+                65, "ok", List.of(), List.of(), List.of(), List.of(), List.of(), "ollama", 50);
+        Page<Analysis> page = new PageImpl<>(List.of(analysis));
+        when(analysisRepository.findAllByUserId(USER_ID, PageRequest.of(0, 20))).thenReturn(page);
+
+        Page<AnalysisSummaryResponse> result =
+                service(new FakeLlmClient(VALID_VERDICT)).listAnalyses(USER_ID, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).singleElement().satisfies(s -> {
+            assertThat(s.score()).isEqualTo(65);
+            assertThat(s.jobTitle()).isEqualTo("Backend Engineer");
+        });
+    }
+}

@@ -1,5 +1,7 @@
 package com.princeramteke.resumeai.common.exception;
 
+import com.princeramteke.resumeai.analysis.exception.AnalysisFailedException;
+import com.princeramteke.resumeai.analysis.exception.AnalysisNotFoundException;
 import com.princeramteke.resumeai.auth.exception.EmailAlreadyExistsException;
 import com.princeramteke.resumeai.auth.exception.InvalidCredentialsException;
 import com.princeramteke.resumeai.common.dto.ErrorResponse;
@@ -45,10 +47,17 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(401, "Unauthorized", ex.getMessage(), traceId()));
     }
 
-    @ExceptionHandler({ResumeNotFoundException.class, JobDescriptionNotFoundException.class})
+    @ExceptionHandler({ResumeNotFoundException.class, JobDescriptionNotFoundException.class,
+            AnalysisNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of(404, "Not Found", ex.getMessage(), traceId()));
+    }
+
+    @ExceptionHandler(AnalysisFailedException.class)
+    public ResponseEntity<ErrorResponse> handleAnalysisFailed(AnalysisFailedException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of(422, "Unprocessable Entity", ex.getMessage(), traceId()));
     }
 
     @ExceptionHandler({InvalidResumeException.class, ExtractionException.class})
