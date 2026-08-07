@@ -16,7 +16,7 @@
 - **Spring Security 6** — mature auth/authz; stateless JWT + method security.
 
 ## 3. AI / RAG
-- **Spring AI** — Spring-native abstraction over chat + embedding models and vector stores; keeps the app provider-agnostic.
+- **Provider abstraction (`EmbeddingClient`, and `LlmClient` in M5)** — the app's *own* interfaces are the contract everything codes against; provider choice is config, not code. **Current implementation (M4):** the Ollama/OpenAI `EmbeddingClient`s are thin adapters over Spring's built-in `RestClient` (no extra dependency), and vector I/O uses native pgvector SQL directly (see `DATABASE.md §5`). **Spring AI** remains the intended richer backing for these adapters and is deferred until it earns its dependency weight (likely alongside the LLM synthesis work); adopting it is an implementation swap behind the same interface, not a contract change.
 - **LangChain4j** (optional/complementary) — richer chains/tools if needed; your resume already lists it.
 - **Ollama** — run open models locally (llama3.1:8b for chat, nomic-embed-text for embeddings). Zero cost, data stays local.
 - **OpenAI** (fallback) — quality/latency on demand for demos; behind the same interface.

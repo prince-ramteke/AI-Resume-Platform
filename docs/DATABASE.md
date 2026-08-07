@@ -49,26 +49,47 @@ CREATE INDEX idx_users_email ON users (email);
 ### 3.2 resumes
 ```sql
 CREATE TABLE resumes (
-    id         BIGSERIAL PRIMARY KEY,
-    user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    filename   VARCHAR(255) NOT NULL,
-    raw_text   TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    id           BIGSERIAL PRIMARY KEY,
+    user_id      BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    filename     VARCHAR(255) NOT NULL,
+    raw_text     TEXT         NOT NULL,
+    content_type VARCHAR(100),                -- MIME type (application/pdf, etc.)
+    file_size    BIGINT,                      -- bytes
+    file_path    VARCHAR(500),                -- path in local/cloud storage
+    page_count   INT,                         -- extracted via Tika
+    language     VARCHAR(10),                 -- detected document language
+    deleted      BOOLEAN      NOT NULL DEFAULT false,  -- soft delete
+    created_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ                  -- set on replace/update
 );
 CREATE INDEX idx_resumes_user ON resumes (user_id);
+CREATE INDEX idx_resumes_user_active ON resumes (user_id) WHERE deleted = false;
 ```
+
+> The `V2__resume_metadata.sql` migration adds `content_type`, `file_size`, `file_path`, `page_count`, `language`, `deleted`, `updated_at`, and the partial index on active resumes.
 
 ### 3.3 job_descriptions
 ```sql
 CREATE TABLE job_descriptions (
-    id         BIGSERIAL PRIMARY KEY,
-    user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    title      VARCHAR(255) NOT NULL,
-    raw_text   TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    id           BIGSERIAL PRIMARY KEY,
+    user_id      BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title        VARCHAR(255) NOT NULL,
+    raw_text     TEXT         NOT NULL,
+    content_type VARCHAR(100),                -- MIME type (application/pdf, text/plain, etc.)
+    file_size    BIGINT,                      -- bytes (null for text-paste JDs)
+    file_path    VARCHAR(500),                -- path in local/cloud storage (null for text-paste)
+    page_count   INT,                         -- extracted via Tika (null for TXT / text-paste)
+    language     VARCHAR(10),                 -- detected document language
+    deleted      BOOLEAN      NOT NULL DEFAULT false,  -- soft delete
+    created_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ                  -- set on update
 );
 CREATE INDEX idx_jd_user ON job_descriptions (user_id);
+CREATE INDEX idx_jd_user_active ON job_descriptions (user_id) WHERE deleted = false;
+CREATE INDEX idx_jd_title ON job_descriptions USING gin (to_tsvector('english', title));
 ```
+
+> The `V3__job_description_metadata.sql` migration adds `content_type`, `file_size`, `file_path`, `page_count`, `language`, `deleted`, `updated_at`, the partial index on active JDs, and a GIN index on title for full-text search.
 
 ### 3.4 document_chunks  (PGVector)
 ```sql
@@ -140,8 +161,10 @@ Stored on `analyses` so the verdict stays flexible without extra tables.
 
 ## 5. JPA mapping notes
 
-- Use `@Column(columnDefinition = "vector(768)")` with a custom PGVector Hibernate type, OR use Spring AI's `VectorStore` abstraction over PGVector (preferred — less boilerplate).
-- JSONB columns: map with `@JdbcTypeCode(SqlTypes.JSON)` on a typed field (list of records), or `hypersistence-utils`.
+- **`document_chunks` (implemented, M4):** the `DocumentChunk` entity maps only the non-vector columns (`id`, `source_type`, `source_id`, `chunk_index`, `content`, `created_at`). The `embedding vector(768)` and `metadata jsonb` columns are **not** mapped as managed fields — chunks are written with a native `INSERT ... CAST(:embedding AS vector)` and read back for retrieval with a native cosine query (`1 - (embedding <=> CAST(:q AS vector))`, ordered by `<=>`). The embedding is passed as a bound, parameterized pgvector literal (`[0.1,0.2,...]`) — never string-concatenated. This keeps plain Hibernate (`ddl-auto: validate`) happy without a custom vector type; unmapped columns are allowed by `validate`.
+- The single source of truth for the vector dimension is the `app.embedding.dimensions` config (default 768) — it must match both the embedding model and the `vector(N)` column.
+- Alternative (deferred): a custom PGVector Hibernate type or Spring AI's `VectorStore` would remove the native SQL, at the cost of an added dependency. Revisit alongside the LLM synthesis work.
+- JSONB columns (on `analyses`): map with `@JdbcTypeCode(SqlTypes.JSON)` on a typed field (list of records), or `hypersistence-utils`.
 - Timestamps: `TIMESTAMPTZ` → `Instant`/`OffsetDateTime`.
 - Always set `ON DELETE CASCADE` at DB level AND `orphanRemoval`/cascade in JPA to avoid orphans.
 
@@ -150,7 +173,9 @@ Stored on `analyses` so the verdict stays flexible without extra tables.
 ## 6. Migrations
 
 - Use **Flyway**. Migrations in `backend/src/main/resources/db/migration/`.
-- `V1__init.sql` (extension + core tables), `V2__vector_index.sql`, etc.
+- `V1__init.sql` — pgvector extension + core tables (users, resumes, job_descriptions, document_chunks, analyses)
+- `V2__resume_metadata.sql` — adds resume metadata columns (content_type, file_size, file_path, page_count, language, deleted, updated_at) and partial index
+- `V3__job_description_metadata.sql` — adds JD metadata columns (content_type, file_size, file_path, page_count, language, deleted, updated_at) and indexes (partial on active, GIN on title)
 - Never edit an applied migration; add a new one.
 
 ---

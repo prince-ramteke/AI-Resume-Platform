@@ -131,9 +131,11 @@ public interface EmbeddingClient {
     float[] embed(String text);
     List<float[]> embedBatch(List<String> texts);
     int dimensions();
+    String providerName();
 }
 ```
 
+- **`EmbeddingClient` is implemented (M4).** `OllamaEmbeddingClient` (default) and `OpenAiEmbeddingClient` (fallback) are thin `RestClient` adapters selected by `app.embedding.provider` via `@ConditionalOnProperty`. `LlmClient` and its impls arrive in M5 with the synthesis step.
 - `OllamaLlmClient` is the default. `OpenAiLlmClient` is the fallback.
 - A `ResilientLlmClient` decorator wraps the primary and, on timeout/error (and if `LLM_FALLBACK_ENABLED=true`), retries via the fallback.
 - Provider chosen by config: `LLM_PROVIDER=ollama|openai`. Tests inject a `FakeLlmClient` returning canned JSON — no network in unit tests.
