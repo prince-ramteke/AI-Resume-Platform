@@ -66,3 +66,15 @@ app:
       base-url: ${OPENAI_BASE_URL:https://api.openai.com}
       model: ${OPENAI_EMBED_MODEL:text-embedding-3-small}
       api-key: ${OPENAI_API_KEY:}
+  llm:
+    provider: ${LLM_PROVIDER:ollama}
+    temperature: ${LLM_TEMPERATURE:0.0}
+    seed: ${LLM_SEED:42}
+    fallback-enabled: ${LLM_FALLBACK_ENABLED:true}   # reserved for the resilience milestone; not yet wired
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      model: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
+    openai:
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+      api-key: ${OPENAI_API_KEY:}
