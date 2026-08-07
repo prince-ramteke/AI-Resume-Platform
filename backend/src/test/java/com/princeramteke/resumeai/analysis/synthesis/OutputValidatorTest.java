@@ -92,6 +92,21 @@ class OutputValidatorTest {
     }
 
     @Test
+    void validate_bracketedEvidenceRef_isNormalizedAndGrounded() {
+        // a model that echoes the citation tag exactly as shown in the prompt ("[RESUME#0]")
+        LlmVerdict result = validator.validate(
+                verdict(80, List.of(skill("Spring", "[RESUME#2]")), List.of(skill("AWS", "[JD#3]"))),
+                VALID_REFS);
+
+        assertThat(result.matchedSkills()).singleElement().satisfies(s -> {
+            assertThat(s.skill()).isEqualTo("Spring");
+            assertThat(s.evidenceRef()).isEqualTo("RESUME#2"); // stored canonical, unbracketed
+        });
+        assertThat(result.missingSkills()).singleElement()
+                .satisfies(s -> assertThat(s.evidenceRef()).isEqualTo("JD#3"));
+    }
+
+    @Test
     void validate_highScoreWithNoGroundedMatch_isRejected() {
         LlmVerdict injected = verdict(100, List.of(skill("Everything", "RESUME#999")), List.of());
 

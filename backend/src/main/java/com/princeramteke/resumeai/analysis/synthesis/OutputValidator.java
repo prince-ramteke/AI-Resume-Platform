@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -51,13 +52,34 @@ public class OutputValidator {
     }
 
     private List<SkillClaim> ground(List<SkillClaim> claims, Set<String> validRefs) {
-        List<SkillClaim> kept = claims.stream()
-                .filter(c -> c.evidenceRef() != null && validRefs.contains(c.evidenceRef()))
-                .toList();
+        List<SkillClaim> kept = new ArrayList<>();
+        for (SkillClaim c : claims) {
+            String ref = normalizeRef(c.evidenceRef());
+            if (ref != null && validRefs.contains(ref)) {
+                // store the canonical, unbracketed ref so it resolves against the evidence[] entries
+                kept.add(new SkillClaim(c.skill(), c.importance(), ref));
+            }
+        }
         int dropped = claims.size() - kept.size();
         if (dropped > 0) {
             log.info("Output validation dropped {} skill claim(s) with unresolved evidence refs", dropped);
         }
         return kept;
+    }
+
+    /**
+     * Strip one outer pair of square brackets so a model that echoes the citation tag exactly as
+     * shown in the prompt ({@code [RESUME#0]}) resolves to the canonical stored ref
+     * ({@code RESUME#0}). Un-bracketed refs are returned unchanged (trimmed).
+     */
+    private String normalizeRef(String ref) {
+        if (ref == null) {
+            return null;
+        }
+        String trimmed = ref.trim();
+        if (trimmed.length() >= 2 && trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
+        }
+        return trimmed;
     }
 }
