@@ -122,4 +122,35 @@ class OutputValidatorTest {
         assertThat(result.score()).isEqualTo(20);
         assertThat(result.matchedSkills()).isEmpty();
     }
+
+    @Test
+    void validate_summaryExceedingColumnLimit_isTruncatedTo500() {
+        String longSummary = "x".repeat(600);
+        LlmVerdict input = new LlmVerdict(70, longSummary,
+                List.of(skill("Spring", "RESUME#2")), List.of(), List.of(), List.of());
+
+        LlmVerdict result = validator.validate(input, VALID_REFS);
+
+        assertThat(result.summary()).hasSize(500);
+    }
+
+    @Test
+    void validate_summaryWithinLimit_isUnchanged() {
+        LlmVerdict input = new LlmVerdict(70, "Concise one-sentence summary.",
+                List.of(skill("Spring", "RESUME#2")), List.of(), List.of(), List.of());
+
+        LlmVerdict result = validator.validate(input, VALID_REFS);
+
+        assertThat(result.summary()).isEqualTo("Concise one-sentence summary.");
+    }
+
+    @Test
+    void validate_nullSummary_isPreserved() {
+        LlmVerdict input = new LlmVerdict(70, null,
+                List.of(skill("Spring", "RESUME#2")), List.of(), List.of(), List.of());
+
+        LlmVerdict result = validator.validate(input, VALID_REFS);
+
+        assertThat(result.summary()).isNull();
+    }
 }

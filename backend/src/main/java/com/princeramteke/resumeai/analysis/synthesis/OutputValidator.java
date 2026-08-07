@@ -32,8 +32,12 @@ public class OutputValidator {
     /** A match this strong cannot be justified without at least one grounded matched skill. */
     private static final int MIN_SCORE_REQUIRING_MATCH = 50;
 
+    /** Must match the {@code analyses.summary VARCHAR(500)} column so a persist can never overflow. */
+    private static final int MAX_SUMMARY_LENGTH = 500;
+
     public LlmVerdict validate(LlmVerdict verdict, Set<String> validRefs) {
         int score = clamp(verdict.score());
+        String summary = truncateSummary(verdict.summary());
 
         List<SkillClaim> matched = ground(verdict.matchedSkills(), validRefs);
         List<SkillClaim> missing = ground(verdict.missingSkills(), validRefs);
@@ -44,7 +48,20 @@ public class OutputValidator {
                     "Unsupported verdict: score " + score + " with no grounded matched skills");
         }
 
-        return new LlmVerdict(score, verdict.summary(), matched, missing, weak, verdict.recommendations());
+        return new LlmVerdict(score, summary, matched, missing, weak, verdict.recommendations());
+    }
+
+    /**
+     * Bound the model's summary to the database column width. Truncating by UTF-16 length is safe:
+     * 500 code units is always at most 500 characters (code points), so the persisted value can
+     * never exceed {@code VARCHAR(500)}. Summaries within the limit are returned unchanged.
+     */
+    private String truncateSummary(String summary) {
+        if (summary != null && summary.length() > MAX_SUMMARY_LENGTH) {
+            log.info("Output validation truncated an over-long summary to {} chars", MAX_SUMMARY_LENGTH);
+            return summary.substring(0, MAX_SUMMARY_LENGTH);
+        }
+        return summary;
     }
 
     private int clamp(int score) {

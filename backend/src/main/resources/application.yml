@@ -25,6 +25,14 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  # Applied to the auto-configured RestClient.Builder used by the Ollama/OpenAI LLM and
+  # embedding clients. Bounds indefinite hangs on a stalled provider; the read timeout is
+  # generous because local model inference can take minutes.
+  http:
+    client:
+      connect-timeout: ${HTTP_CONNECT_TIMEOUT:5s}
+      read-timeout: ${HTTP_READ_TIMEOUT:300s}
+
 server:
   port: 8080
 
