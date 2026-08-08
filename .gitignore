@@ -22,3 +22,6 @@ npm-debug.log*
 
 # Logs
 *.log
+
+# Local upload artifacts
+backend/uploads/
