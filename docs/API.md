@@ -180,7 +180,10 @@ Downloads the original uploaded file (file-based JDs only). Returns binary conte
 
 ## 5. Analysis (core)
 
+All analysis endpoints require authentication. Ownership is enforced in the service — a resume, JD, or analysis the caller does not own returns `404` (not `403`) to prevent enumeration. Admins (`ROLE_ADMIN`) can read any analysis via `GET /api/analyses/{id}`.
+
 ### POST /api/analyses
+Runs the RAG + scoring pipeline for a resume against a job description (both must be owned by the caller). Returns `201` with a `Location: /api/analyses/{id}` header.
 ```json
 // request
 { "resumeId": 12, "jobDescriptionId": 7 }
@@ -216,14 +219,20 @@ Downloads the original uploaded file (file-based JDs only). Returns binary conte
   "latencyMs": 4120,
   "createdAt": "2026-08-05T10:20:00Z"
 }
-// 404 if caller doesn't own resume or JD · 422 if LLM output unusable
+// 201 with Location: /api/analyses/{id}
+// 400 invalid body (resumeId/jobDescriptionId null or non-positive)
+// 401 unauthenticated
+// 404 if caller doesn't own resume or JD
+// 422 if the LLM output is unusable after one repair retry
 ```
+Every `evidenceRef` in `matchedSkills`/`missingSkills`/`weakSkills` resolves to an entry in `evidence`; unsupported claims are dropped during validation, so a returned claim is always grounded.
 
 ### GET /api/analyses
-Paginated history. `200 Page<{ id, score, jobTitle, createdAt }>`.
+Paginated history of the caller's analyses. `200 Page<AnalysisSummaryResponse>` where
+`AnalysisSummaryResponse = { id, score, jobTitle, createdAt }`. Default sort: `createdAt`, default page size: `20`. `401` if unauthenticated.
 
 ### GET /api/analyses/{id}
-Full `AnalysisResponse`. `404` if missing or not owner.
+Full `AnalysisResponse`. `404` if missing or not owner; an admin (`ROLE_ADMIN`) may read any analysis. `401` if unauthenticated.
 
 ---
 
