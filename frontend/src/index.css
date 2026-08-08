@@ -1,1 +1,101 @@
 @import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/* Self-hosted fonts (see public/fonts/README.md for the exact files)  */
+/* Variable fonts; graceful system fallbacks declared in @theme below. */
+/* ------------------------------------------------------------------ */
+@font-face {
+  font-family: "Fraunces";
+  src: url("/fonts/Fraunces-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Variable.woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ------------------------------------------------------------------ */
+/* Design tokens — "The Evidence Ledger" (approved M6.1)               */
+/* Tailwind v4 CSS-first: these generate utility classes               */
+/* (background, text, border, radius, shadow, font).                   */
+/* ------------------------------------------------------------------ */
+@theme {
+  /* color — cool paper neutrals + ink + one cobalt accent + status trio */
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #eef1f5;
+  --color-ink: #14181f;
+  --color-ink-hover: #242a34;
+  --color-muted: #5b6472;
+  --color-border: #e2e6ec;
+
+  --color-accent: #2f44a0;
+  --color-accent-hover: #26397f;
+  --color-accent-soft: #eaedf9;
+
+  --color-success: #1e7a52;
+  --color-success-soft: #e5f3ec;
+  --color-warning: #9a6b00;
+  --color-warning-soft: #fbf1dd;
+  --color-danger: #b4341f;
+  --color-danger-soft: #fbebe8;
+
+  /* type — Fraunces (display) · Inter (body/UI) · JetBrains Mono (data) */
+  --font-display: "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Menlo",
+    monospace;
+
+  /* radius — crisp, leaning soft */
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-modal: 12px;
+
+  /* elevation — border-first; shadows only for things that float */
+  --shadow-sm: 0 1px 2px rgb(20 24 31 / 0.06), 0 2px 8px rgb(20 24 31 / 0.08);
+  --shadow-md: 0 8px 24px rgb(20 24 31 / 0.12);
+}
+
+/* ------------------------------------------------------------------ */
+/* Base layer                                                          */
+/* ------------------------------------------------------------------ */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+/* Respect reduced-motion everywhere — non-essential motion is disabled. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
