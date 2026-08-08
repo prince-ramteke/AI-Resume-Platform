@@ -1,5 +1,6 @@
 export { Button } from "./Button";
 export { Spinner } from "./Spinner";
+export { Skeleton } from "./Skeleton";
 export { Input } from "./Input";
 export { Textarea } from "./Textarea";
 export { Card } from "./Card";
