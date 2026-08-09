@@ -33,11 +33,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -108,6 +110,23 @@ public class AnalysisService {
 
         log.info("Analysis started: userId={}, resumeId={}, jobDescriptionId={}",
                 userId, resume.getId(), jd.getId());
+
+        // 3a: result-cache lookup (v1.1). If a prior analysis for this exact
+        // (owner, resume, jd) tuple was recorded after the last modification of
+        // either underlying document, return it and skip the ~2-minute pipeline.
+        // Ownership is enforced in the query itself. Concurrent duplicate
+        // requests can both miss and both run — deduplicating in-flight work is
+        // out of scope for this milestone.
+        Instant freshnessThreshold = freshnessThreshold(resume, jd);
+        Optional<Analysis> cached = analysisRepository
+                .findFirstByUserIdAndResumeIdAndJobDescriptionIdAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+                        userId, resume.getId(), jd.getId(), freshnessThreshold);
+        if (cached.isPresent()) {
+            Analysis hit = cached.get();
+            log.info("Analysis cache HIT: userId={}, analysisId={}, resumeId={}, jobDescriptionId={}",
+                    userId, hit.getId(), resume.getId(), jd.getId());
+            return analysisMapper.toResponse(hit);
+        }
 
         // 4: resume ingestion (idempotent; embeddings run outside any DB transaction)
         ingestionService.ingest(SourceType.RESUME, resume.getId(), resume.getRawText());
@@ -182,6 +201,21 @@ public class AnalysisService {
 
     private LlmVerdict parseAndValidate(String raw, Set<String> validRefs) {
         return outputValidator.validate(verdictParser.parse(raw), validRefs);
+    }
+
+    /**
+     * The instant an analysis must have been produced at (or after) to still be
+     * valid — the later of the two documents' most recent modification times.
+     * We coalesce {@code updatedAt} with {@code createdAt} because a document
+     * that has never been edited has a null {@code updatedAt}; without that
+     * fallback the comparison would degenerate.
+     */
+    private Instant freshnessThreshold(Resume resume, JobDescription jd) {
+        Instant resumeStamp = resume.getUpdatedAt() != null
+                ? resume.getUpdatedAt() : resume.getCreatedAt();
+        Instant jdStamp = jd.getUpdatedAt() != null
+                ? jd.getUpdatedAt() : jd.getCreatedAt();
+        return resumeStamp.isAfter(jdStamp) ? resumeStamp : jdStamp;
     }
 
     private List<ChunkEvidence> chunkJobDescription(String jdText) {

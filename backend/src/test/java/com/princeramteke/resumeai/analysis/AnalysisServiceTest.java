@@ -40,12 +40,14 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -99,11 +101,20 @@ class AnalysisServiceTest {
                 verdictParser, outputValidator, mapper);
     }
 
+    // Fixed base timestamps for deterministic cache-freshness tests. Anything
+    // "later than" these represents an edit; anything "earlier" is stale.
+    private static final Instant RESUME_CREATED_AT = Instant.parse("2026-01-01T10:00:00Z");
+    private static final Instant JD_CREATED_AT = Instant.parse("2026-01-02T10:00:00Z");
+
     private Resume resume() {
         User user = new User("prince@example.com", "hash");
         Resume resume = new Resume(user, "resume.pdf", "application/pdf", 1000L,
                 "/path/resume.pdf", RESUME_TEXT, 1, "en");
         ReflectionTestUtils.setField(resume, "id", RESUME_ID);
+        // Prime timestamps — the service reads createdAt/updatedAt for the
+        // cache-freshness invariant; @PrePersist doesn't fire on in-memory
+        // objects.
+        ReflectionTestUtils.setField(resume, "createdAt", RESUME_CREATED_AT);
         return resume;
     }
 
@@ -111,6 +122,7 @@ class AnalysisServiceTest {
         JobDescription jd = new JobDescription(new User("prince@example.com", "hash"),
                 "Backend Engineer", JD_TEXT);
         ReflectionTestUtils.setField(jd, "id", JD_ID);
+        ReflectionTestUtils.setField(jd, "createdAt", JD_CREATED_AT);
         return jd;
     }
 
@@ -155,6 +167,85 @@ class AnalysisServiceTest {
 
         verify(ingestionService).ingest(SourceType.RESUME, RESUME_ID, RESUME_TEXT);
         verify(retrievalService).retrieve(SourceType.RESUME, RESUME_ID, JD_TEXT);
+    }
+
+    @Test
+    void analyze_cacheHit_returnsPreviousAnalysisAndSkipsPipeline() {
+        // Freshness threshold = max(RESUME_CREATED_AT, JD_CREATED_AT) = JD_CREATED_AT.
+        // A cached analysis created after that is fresh and must be returned as-is.
+        stubOwnedResumeAndJd();
+        Analysis cached = new Analysis(
+                new User("prince@example.com", "hash"), resume(), jobDescription(),
+                88, "cached summary",
+                List.of(new SkillClaim("Cached Skill", "HIGH", "RESUME#0")),
+                List.of(), List.of(),
+                List.of(new Recommendation("cached rec", "HIGH", "cached reason")),
+                List.of(new Evidence("RESUME#0", SourceType.RESUME, 0, "cached snippet")),
+                "ollama", 4200);
+        ReflectionTestUtils.setField(cached, "id", 55L);
+        ReflectionTestUtils.setField(cached, "createdAt", JD_CREATED_AT.plusSeconds(60));
+        when(analysisRepository
+                .findFirstByUserIdAndResumeIdAndJobDescriptionIdAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+                        USER_ID, RESUME_ID, JD_ID, JD_CREATED_AT))
+                .thenReturn(Optional.of(cached));
+
+        AnalysisResponse response = service(new FakeLlmClient(VALID_VERDICT)).analyze(request(), USER_ID);
+
+        assertThat(response.id()).isEqualTo(55L);
+        assertThat(response.score()).isEqualTo(88);
+        assertThat(response.summary()).isEqualTo("cached summary");
+        // Pipeline steps 4-10 must all be skipped.
+        verify(ingestionService, never()).ingest(any(), any(), any());
+        verify(retrievalService, never()).retrieve(any(), any(), any());
+        verify(analysisRepository, never()).save(any());
+    }
+
+    @Test
+    void analyze_cachedButResumeWasReplaced_runsPipelineAgain() {
+        // Resume was replaced AFTER the last analysis: freshnessThreshold moves
+        // to the replacement instant, and the repository's ">= threshold" query
+        // returns empty. Service must fall through to the full pipeline.
+        Resume replacedResume = resume();
+        ReflectionTestUtils.setField(replacedResume, "updatedAt", JD_CREATED_AT.plusSeconds(3600));
+        when(resumeRepository.findByIdAndUserIdAndDeletedFalse(RESUME_ID, USER_ID))
+                .thenReturn(Optional.of(replacedResume));
+        when(jobDescriptionRepository.findByIdAndUserIdAndDeletedFalse(JD_ID, USER_ID))
+                .thenReturn(Optional.of(jobDescription()));
+        when(analysisRepository
+                .findFirstByUserIdAndResumeIdAndJobDescriptionIdAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+                        any(), any(), any(), any()))
+                .thenReturn(Optional.empty());
+        stubRetrieval();
+        stubSaveReturnsArgument();
+
+        AnalysisResponse response = service(new FakeLlmClient(VALID_VERDICT)).analyze(request(), USER_ID);
+
+        assertThat(response.score()).isEqualTo(75); // from VALID_VERDICT, not a cached row
+        verify(ingestionService).ingest(SourceType.RESUME, RESUME_ID, RESUME_TEXT);
+        verify(retrievalService).retrieve(SourceType.RESUME, RESUME_ID, JD_TEXT);
+        verify(analysisRepository).save(any(Analysis.class));
+    }
+
+    @Test
+    void analyze_cacheLookup_isScopedToOwner() {
+        // Ownership is baked into the derived query: userId is part of the
+        // WHERE clause, so a different user's cached row is invisible even if
+        // the resume/JD pair matches. We assert the exact userId passed to the
+        // repository call — a regression that dropped that arg would cross the
+        // isolation boundary.
+        stubOwnedResumeAndJd();
+        stubRetrieval();
+        stubSaveReturnsArgument();
+        when(analysisRepository
+                .findFirstByUserIdAndResumeIdAndJobDescriptionIdAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+                        any(), any(), any(), any()))
+                .thenReturn(Optional.empty());
+
+        service(new FakeLlmClient(VALID_VERDICT)).analyze(request(), USER_ID);
+
+        verify(analysisRepository)
+                .findFirstByUserIdAndResumeIdAndJobDescriptionIdAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+                        eq(USER_ID), eq(RESUME_ID), eq(JD_ID), any(Instant.class));
     }
 
     @Test

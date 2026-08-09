@@ -184,6 +184,8 @@ All analysis endpoints require authentication. Ownership is enforced in the serv
 
 ### POST /api/analyses
 Runs the RAG + scoring pipeline for a resume against a job description (both must be owned by the caller). Returns `201` with a `Location: /api/analyses/{id}` header.
+
+**Result cache (v1.1):** if a prior successful analysis exists for the same `(userId, resumeId, jobDescriptionId)` and was recorded after the most recent modification of both underlying documents, the endpoint returns that cached `AnalysisResponse` without re-running the pipeline. The response shape is identical to a fresh run; the `Location` header points at the pre-existing analysis id. Editing/replacing either the resume or the JD invalidates the cache naturally via each entity's `updatedAt`.
 ```json
 // request
 { "resumeId": 12, "jobDescriptionId": 7 }

@@ -109,6 +109,9 @@ This is the heart of the system. When a user requests an analysis of `resumeId` 
    save Analysis (with provider + latencyMs); map to AnalysisResponse DTO
 ```
 
+**Result cache (v1.1):** step 1 also runs a scoped lookup on the `analyses` table for a prior row on the same `(userId, resumeId, jobDescriptionId)` whose `createdAt` is at or after the later of `resume.updatedAt` and `jobDescription.updatedAt`. On a hit, steps 2–7 are skipped and the cached DTO is returned; on any edit of either document, the invariant fails naturally and the pipeline runs again.
+
+
 **Design principles baked in here:**
 - **Grounding over generation** — the model synthesizes over retrieved evidence; it isn't asked to "remember" the resume.
 - **Structured output** — a fixed JSON contract, validated, never free text.
