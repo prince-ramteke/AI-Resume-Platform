@@ -87,20 +87,17 @@ public class AuthService {
     }
 
     @Transactional
-    public LoginResponse refresh(String refreshToken, Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(InvalidCredentialsException::new);
-
+    public LoginResponse refresh(String refreshToken) {
         Instant now = Instant.now();
         String tokenHash = sha256(refreshToken);
 
+        // The refresh token is the credential; ownership is the user the stored
+        // record belongs to. No access-token principal is required or trusted here.
         RefreshToken storedToken = refreshTokenRepository
                 .findByTokenHashAndNotRevokedAndNotExpired(tokenHash, now)
                 .orElseThrow(InvalidCredentialsException::new);
 
-        if (!storedToken.getUser().getId().equals(userId)) {
-            throw new InvalidCredentialsException();
-        }
+        User user = storedToken.getUser();
 
         String accessToken = tokenProvider.generateToken(user.getId(), user.getEmail(), user.getRole().name());
         Instant accessExpiresAt = tokenProvider.getExpiry(accessToken);
@@ -117,22 +114,20 @@ public class AuthService {
     }
 
     @Transactional
-    public void logout(String refreshToken, Long userId) {
+    public void logout(String refreshToken) {
         Instant now = Instant.now();
         String tokenHash = sha256(refreshToken);
 
+        // Revocation is authorized by presenting a live refresh token; the record
+        // scopes the operation to exactly one user.
         RefreshToken storedToken = refreshTokenRepository
                 .findByTokenHashAndNotRevokedAndNotExpired(tokenHash, now)
                 .orElseThrow(InvalidCredentialsException::new);
 
-        if (!storedToken.getUser().getId().equals(userId)) {
-            throw new InvalidCredentialsException();
-        }
-
         storedToken.revoke();
         refreshTokenRepository.save(storedToken);
 
-        log.info("User logged out: id={}", userId);
+        log.info("User logged out: id={}", storedToken.getUser().getId());
     }
 
     private String[] generateRefreshToken(User user, String familyId) {

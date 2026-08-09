@@ -151,4 +151,77 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.getCurrentUser(99L))
                 .isInstanceOf(InvalidCredentialsException.class);
     }
+
+    @Test
+    void refresh_validToken_rotatesTokensForTokenOwner() {
+        var user = userWithId(5L, "prince@example.com");
+        var stored = new RefreshToken(user, "storedhash", "fam-1",
+                Instant.now(), Instant.now().plusSeconds(3600));
+
+        when(refreshTokenRepository.findByTokenHashAndNotRevokedAndNotExpired(anyString(), any(Instant.class)))
+                .thenReturn(Optional.of(stored));
+        when(tokenProvider.generateToken(5L, "prince@example.com", "USER")).thenReturn("new.access.token");
+        when(tokenProvider.getExpiry("new.access.token")).thenReturn(Instant.now().plusSeconds(3600));
+
+        var response = authService.refresh("raw-refresh-token");
+
+        // Access token is minted for the token's owner (id 5) — the only stubbed identity.
+        assertThat(response.accessToken()).isEqualTo("new.access.token");
+        verify(tokenProvider).generateToken(5L, "prince@example.com", "USER");
+        // The presented refresh token is rotated out (revoked) and persisted.
+        assertThat(stored.getRevokedAt()).isNotNull();
+        verify(refreshTokenRepository).save(stored);
+        // Ownership comes from the token record, never a caller-supplied id.
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void refresh_unknownOrExpiredToken_throwsUnauthorized() {
+        when(refreshTokenRepository.findByTokenHashAndNotRevokedAndNotExpired(anyString(), any(Instant.class)))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.refresh("bad-token"))
+                .isInstanceOf(InvalidCredentialsException.class);
+
+        verify(tokenProvider, never()).generateToken(any(), any(), any());
+    }
+
+    @Test
+    void logout_validToken_revokesTokenOwnedByUser() {
+        var user = userWithId(7L, "kate@example.com");
+        var stored = new RefreshToken(user, "storedhash", "fam-2",
+                Instant.now(), Instant.now().plusSeconds(3600));
+
+        when(refreshTokenRepository.findByTokenHashAndNotRevokedAndNotExpired(anyString(), any(Instant.class)))
+                .thenReturn(Optional.of(stored));
+
+        authService.logout("raw-refresh-token");
+
+        assertThat(stored.getRevokedAt()).isNotNull();
+        verify(refreshTokenRepository).save(stored);
+        // Scope is the token's owner; no caller identity is consulted.
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void logout_unknownToken_throwsUnauthorized() {
+        when(refreshTokenRepository.findByTokenHashAndNotRevokedAndNotExpired(anyString(), any(Instant.class)))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.logout("bad-token"))
+                .isInstanceOf(InvalidCredentialsException.class);
+
+        verify(refreshTokenRepository, never()).save(any());
+    }
+
+    private User userWithId(Long id, String email) {
+        var user = new User(email, "$2a$10$hashed");
+        try {
+            var idField = User.class.getDeclaredField("id");
+            idField.setAccessible(true);
+            idField.set(user, id);
+        } catch (Exception ignored) {
+        }
+        return user;
+    }
 }

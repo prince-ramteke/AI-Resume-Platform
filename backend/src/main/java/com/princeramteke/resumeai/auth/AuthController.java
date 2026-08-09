@@ -44,17 +44,18 @@ public class AuthController {
 
     @PostMapping("/refresh")
     @Operation(summary = "Refresh the access token using a refresh token")
-    public ResponseEntity<LoginResponse> refresh(@Valid @RequestBody RefreshRequest request, Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
-        LoginResponse response = authService.refresh(request.refreshToken(), userId);
+    public ResponseEntity<LoginResponse> refresh(@Valid @RequestBody RefreshRequest request) {
+        // Public route: the refresh token is the credential. Ownership is derived
+        // from the stored token record, so no valid access token is required.
+        LoginResponse response = authService.refresh(request.refreshToken());
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/logout")
     @Operation(summary = "Revoke the refresh token (logout)")
-    public ResponseEntity<Void> logout(@Valid @RequestBody LogoutRequest request, Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
-        authService.logout(request.refreshToken(), userId);
+    public ResponseEntity<Void> logout(@Valid @RequestBody LogoutRequest request) {
+        // Public route: revocation is authorized by presenting the refresh token itself.
+        authService.logout(request.refreshToken());
         return ResponseEntity.noContent().build();
     }
 }

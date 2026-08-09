@@ -13,6 +13,8 @@ import com.princeramteke.resumeai.security.JwtAccessDeniedHandler;
 import com.princeramteke.resumeai.security.JwtAuthEntryPoint;
 import com.princeramteke.resumeai.security.JwtAuthenticationFilter;
 import com.princeramteke.resumeai.security.JwtTokenProvider;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -23,9 +25,14 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -173,8 +180,71 @@ class AuthControllerTest {
     }
 
     @Test
+    void refresh_expiredAccessToken_returns200() throws Exception {
+        // The blocking bug: an expired access token must NOT prevent refresh from
+        // reaching the controller. The token below is expired but well-formed.
+        var response = new LoginResponse("new.jwt", "Bearer",
+                Instant.parse("2026-08-06T18:00:00Z"), "new.refresh",
+                Instant.parse("2026-08-13T18:00:00Z"));
+        when(authService.refresh("refresh.token.here")).thenReturn(response);
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .header("Authorization", "Bearer " + expiredAccessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"refresh.token.here"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("new.jwt"));
+
+        // Ownership is scoped by the refresh token from the body, not the (expired) principal.
+        verify(authService).refresh("refresh.token.here");
+    }
+
+    @Test
+    void logout_noAccessToken_returns204() throws Exception {
+        mockMvc.perform(post("/api/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"refresh.token.here"}
+                                """))
+                .andExpect(status().isNoContent());
+
+        verify(authService).logout("refresh.token.here");
+    }
+
+    @Test
+    void refresh_invalidRefreshToken_returns401() throws Exception {
+        when(authService.refresh(any())).thenThrow(new InvalidCredentialsException());
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"stolen-or-unknown"}
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
     void protectedEndpoint_noToken_returns401() throws Exception {
         mockMvc.perform(get("/api/resumes"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /** A well-formed but already-expired HS256 token signed with the test secret. */
+    private String expiredAccessToken() {
+        SecretKey key = Keys.hmacShaKeyFor(
+                "test-secret-that-is-at-least-32-characters-long-for-hmac"
+                        .getBytes(StandardCharsets.UTF_8));
+        Instant expiredAt = Instant.now().minus(1, ChronoUnit.HOURS);
+        return Jwts.builder()
+                .subject("1")
+                .claim("email", "prince@example.com")
+                .claim("role", "USER")
+                .issuedAt(Date.from(expiredAt.minus(1, ChronoUnit.HOURS)))
+                .expiration(Date.from(expiredAt))
+                .signWith(key)
+                .compact();
     }
 }
