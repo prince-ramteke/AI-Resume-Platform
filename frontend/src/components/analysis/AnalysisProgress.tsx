@@ -67,19 +67,31 @@ export function AnalysisProgress({
 
   return (
     <Card>
-      <div
-        role="status"
-        aria-live="polite"
-        className="flex flex-col items-center gap-3 py-2 text-center"
-      >
+      <div className="flex flex-col items-center gap-3 py-2 text-center">
         <Spinner />
         <p className="font-display text-lg text-ink">
           Analyzing your resume against the job description…
         </p>
-        <p className="font-mono text-sm text-muted" aria-label="Elapsed time">
+        {/*
+          A11y: the elapsed timer ticks every second, so it is deliberately
+          NOT inside a live region — a re-announced counter is worse than
+          silence for screen-reader users. The stage label (below) IS the
+          spoken progress signal, and only changes every ~15 s.
+        */}
+        <p
+          className="font-mono text-sm text-muted"
+          aria-hidden="true"
+        >
           {formatElapsed(elapsed)}
         </p>
-        <p className="text-sm text-ink">{STAGES[stageIdx]}</p>
+        <p
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="text-sm text-ink"
+        >
+          {STAGES[stageIdx]}
+        </p>
         <p className="max-w-md text-xs text-muted">
           This can take up to a couple of minutes on your local Ollama model.
           These stages are frontend pacing — the backend runs the analysis in a

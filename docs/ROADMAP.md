@@ -51,6 +51,9 @@ Set up the skeleton before any feature.
 ---
 
 ## M4 — Frontend  (3–4 days)
+
+> **Numbering note:** git history and the frontend design spec (`docs/frontend/m6-frontend-design.md`) call the frontend **M6**, delivered as sub-milestones M6.1–M6.7. Read "M4" here as the same body of work under that name.
+
 - Auth pages (register/login), token handling, protected routing.
 - Upload resume + add JD screens.
 - "Run analysis" flow + results screen: score gauge, matched/missing/weak chips, ranked recommendations, expandable evidence.

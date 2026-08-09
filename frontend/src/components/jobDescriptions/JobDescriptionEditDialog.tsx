@@ -108,7 +108,8 @@ export function JobDescriptionEditDialog({
             disabled={isPending}
             error={showRawTextError}
           />
-          <p className="self-end text-[12px] text-muted" aria-live="polite">
+          {/* A11y: no aria-live — see JobDescriptionCreateDialog for the reasoning. */}
+          <p className="self-end text-[12px] text-muted">
             {rawText.length.toLocaleString()} /{" "}
             {JD_RAW_TEXT_MAX.toLocaleString()}
           </p>

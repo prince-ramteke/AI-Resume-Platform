@@ -157,7 +157,13 @@ export function JobDescriptionCreateDialog({
               placeholder="Paste the full role description here…"
               error={showRawTextError}
             />
-            <p className="self-end text-[12px] text-muted" aria-live="polite">
+            {/*
+              A11y: no aria-live here — announcing a character count on every
+              keystroke floods screen readers. The count is visual feedback for
+              sighted users; the field's own maxLength enforces the ceiling
+              server-authoritatively via the validator.
+            */}
+            <p className="self-end text-[12px] text-muted">
               {rawText.length.toLocaleString()} /{" "}
               {JD_RAW_TEXT_MAX.toLocaleString()}
             </p>
