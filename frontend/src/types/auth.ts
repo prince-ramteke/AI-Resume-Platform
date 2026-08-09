@@ -24,6 +24,8 @@ export interface LoginResponse {
   accessToken: string;
   tokenType: string;
   expiresAt: string;
+  refreshToken: string;
+  refreshExpiresAt: string;
 }
 
 /** GET /api/auth/me 200 response. */

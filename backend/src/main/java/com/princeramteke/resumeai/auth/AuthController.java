@@ -41,4 +41,20 @@ public class AuthController {
         UserResponse response = authService.getCurrentUser(userId);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/refresh")
+    @Operation(summary = "Refresh the access token using a refresh token")
+    public ResponseEntity<LoginResponse> refresh(@Valid @RequestBody RefreshRequest request, Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        LoginResponse response = authService.refresh(request.refreshToken(), userId);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/logout")
+    @Operation(summary = "Revoke the refresh token (logout)")
+    public ResponseEntity<Void> logout(@Valid @RequestBody LogoutRequest request, Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        authService.logout(request.refreshToken(), userId);
+        return ResponseEntity.noContent().build();
+    }
 }

@@ -125,7 +125,7 @@ class AuthControllerTest {
 
     @Test
     void login_validCredentials_returns200() throws Exception {
-        var response = new LoginResponse("jwt.token.here", Instant.parse("2026-08-06T18:00:00Z"));
+        var response = new LoginResponse("jwt.token.here", "Bearer", Instant.parse("2026-08-06T18:00:00Z"), "refresh.token.here", Instant.parse("2026-08-13T18:00:00Z"));
         when(authService.login(any())).thenReturn(response);
 
         mockMvc.perform(post("/api/auth/login")

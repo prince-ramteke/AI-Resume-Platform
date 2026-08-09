@@ -35,9 +35,9 @@ export function useLogin() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const { accessToken } = await loginRequest({ email, password });
+      const { accessToken, refreshToken } = await loginRequest({ email, password });
       const user = await getMe(accessToken);
-      login(accessToken, user);
+      login(accessToken, refreshToken, user);
       navigate(safeNext(params.get("next")), { replace: true });
     } catch (err) {
       const { status, message } = parseApiError(err);

@@ -18,7 +18,7 @@ export async function register(
   return data;
 }
 
-/** POST /api/auth/login — returns an access token only (no user object). */
+/** POST /api/auth/login — returns access + refresh tokens. */
 export async function login(body: LoginRequest): Promise<LoginResponse> {
   const { data } = await apiClient.post<LoginResponse>("/auth/login", body);
   return data;
@@ -38,4 +38,17 @@ export async function getMe(token?: string): Promise<MeResponse> {
     : undefined;
   const { data } = await apiClient.get<MeResponse>("/auth/me", config);
   return data;
+}
+
+/** POST /api/auth/refresh — rotates the refresh token and returns a new access token. */
+export async function refresh(refreshToken: string): Promise<LoginResponse> {
+  const { data } = await apiClient.post<LoginResponse>("/auth/refresh", {
+    refreshToken,
+  });
+  return data;
+}
+
+/** POST /api/auth/logout — revokes the refresh token server-side. */
+export async function logout(refreshToken: string): Promise<void> {
+  await apiClient.post("/auth/logout", { refreshToken });
 }
