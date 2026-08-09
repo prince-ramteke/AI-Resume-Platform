@@ -82,3 +82,28 @@ export const LogoutIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M16 17l5-5-5-5M21 12H9" />
   </Base>
 );
+
+export const DownloadIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="M12 3v12" />
+    <path d="M7 11l5 5 5-5" />
+    <path d="M5 21h14" />
+  </Base>
+);
+
+export const UploadIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="M12 21V9" />
+    <path d="M7 13l5-5 5 5" />
+    <path d="M5 3h14" />
+  </Base>
+);
+
+export const TrashIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="M3 6h18" />
+    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <path d="M6 6v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6" />
+    <path d="M10 11v6M14 11v6" />
+  </Base>
+);

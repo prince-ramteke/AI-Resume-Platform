@@ -1,6 +1,10 @@
 export { Button } from "./Button";
+export { LinkButton } from "./LinkButton";
 export { Spinner } from "./Spinner";
 export { Skeleton } from "./Skeleton";
+export { Modal } from "./Modal";
+export { ConfirmDialog } from "./ConfirmDialog";
+export { Pagination } from "./Pagination";
 export { Input } from "./Input";
 export { Textarea } from "./Textarea";
 export { Card } from "./Card";

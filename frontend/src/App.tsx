@@ -6,6 +6,8 @@ import { AppLayout } from "./components/layout/AppLayout";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { RegisterPage } from "./pages/auth/RegisterPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { ResumeListPage } from "./pages/resumes/ResumeListPage";
+import { ResumeDetailPage } from "./pages/resumes/ResumeDetailPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
@@ -24,21 +26,19 @@ function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route
-            path="/resumes"
-            element={<PlaceholderPage title="Resumes" slice="M6.3" />}
-          />
+          <Route path="/resumes" element={<ResumeListPage />} />
+          <Route path="/resumes/:id" element={<ResumeDetailPage />} />
           <Route
             path="/job-descriptions"
-            element={<PlaceholderPage title="Job Descriptions" slice="M6.4" />}
+            element={<PlaceholderPage title="Job Descriptions" slice="M6.5" />}
           />
           <Route
             path="/analyses/new"
-            element={<PlaceholderPage title="New Analysis" slice="M6.5" />}
+            element={<PlaceholderPage title="New Analysis" slice="M6.6" />}
           />
           <Route
             path="/analyses"
-            element={<PlaceholderPage title="History" slice="M6.6" />}
+            element={<PlaceholderPage title="History" slice="M6.7" />}
           />
 
           {/* Reserved for a later admin area — no screen ships in M6. */}
