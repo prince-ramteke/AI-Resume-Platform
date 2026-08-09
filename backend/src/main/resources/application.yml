@@ -70,6 +70,12 @@ app:
     chunk-overlap: ${RAG_CHUNK_OVERLAP:50}
     retrieval-top-k: ${RAG_RETRIEVAL_TOP_K:8}
     max-prompt-tokens: ${LLM_MAX_PROMPT_TOKENS:3500}
+    # Hybrid retrieval (v1.1): blend vector similarity with PostgreSQL full-text keyword
+    # search and fuse via Reciprocal Rank Fusion. Defaults OFF so behavior stays vector-only
+    # until enabled. Enabling requires the V6 full-text index to be applied.
+    hybrid-enabled: ${RAG_HYBRID_ENABLED:false}
+    hybrid-rrf-k: ${RAG_HYBRID_RRF_K:60}                         # RRF damping constant (standard default 60)
+    hybrid-candidate-pool-size: ${RAG_HYBRID_CANDIDATE_POOL_SIZE:20}  # candidates pulled per arm before fusion
   embedding:
     provider: ${EMBEDDING_PROVIDER:ollama}
     dimensions: ${EMBEDDING_DIMENSIONS:768}

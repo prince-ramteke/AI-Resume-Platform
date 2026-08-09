@@ -51,4 +51,31 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, Lo
                                         @Param("sourceId") Long sourceId,
                                         @Param("queryVector") String queryVector,
                                         @Param("topK") int topK);
+
+    /**
+     * Top-k lexical (keyword) matches of one document to a free-text query, best first.
+     * Uses PostgreSQL full-text search: {@code plainto_tsquery} parses the query, the GIN
+     * index on {@code to_tsvector('english', content)} (see V6 migration) serves the match,
+     * and {@code ts_rank} scores relevance. Same {@code source_type}+{@code source_id}
+     * scoping as {@link #searchSimilar} so hybrid retrieval blends like-for-like candidates.
+     * The {@code score} here is a lexical rank, not a cosine similarity; hybrid fusion uses
+     * only the row's rank position, so the two score scales never need to be comparable.
+     */
+    @Query(value = """
+            SELECT id AS id,
+                   source_type AS sourceType,
+                   source_id AS sourceId,
+                   chunk_index AS chunkIndex,
+                   content AS content,
+                   ts_rank(to_tsvector('english', content), plainto_tsquery('english', :query)) AS score
+            FROM document_chunks
+            WHERE source_type = :sourceType AND source_id = :sourceId
+              AND to_tsvector('english', content) @@ plainto_tsquery('english', :query)
+            ORDER BY score DESC, chunk_index ASC
+            LIMIT :topK
+            """, nativeQuery = true)
+    List<ChunkSimilarity> searchByKeyword(@Param("sourceType") String sourceType,
+                                          @Param("sourceId") Long sourceId,
+                                          @Param("query") String query,
+                                          @Param("topK") int topK);
 }

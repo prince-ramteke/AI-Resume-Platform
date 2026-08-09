@@ -90,7 +90,7 @@ This is the heart of the system. When a user requests an analysis of `resumeId` 
 4. RETRIEVE EVIDENCE
    vector-search RESUME chunks (top-k, cosine, k ≤ 8) using the full JD text as the query
    filter: source_type = 'RESUME' (JD text is NOT embedded in v1 — it is used only as the query)
-   (v1.1: hybrid = vector + keyword, then re-rank)
+   (v1.1: hybrid = vector + keyword, then re-rank — implemented, opt-in; see "Hybrid retrieval" below)
 
 5. SYNTHESIZE (single-pass LLM call)
    assemble prompt: system instructions + full JD text + retrieved resume evidence chunks
@@ -119,6 +119,8 @@ This is the heart of the system. When a user requests an analysis of `resumeId` 
 - **Single-pass LLM** — one model call per analysis in v1, keeping total latency under the 5 s p95 target.
 - **No JD embedding in v1** — the JD is used as the vector-search query, not stored as chunks. JD embedding may be added in v1.1 if cross-analysis similarity search is needed.
 - **Token budget** — prompt assembly enforces a hard token cap (model context window minus reserved output tokens). If retrieved chunks exceed the budget, the lowest-ranked chunks are dropped. The budget constant lives in application config (`LLM_MAX_PROMPT_TOKENS`).
+
+**Hybrid retrieval (v1.1):** step 4 can run in a hybrid mode that blends the vector arm with a PostgreSQL full-text (keyword) arm over the same `document_chunks.content`, scoped to the same `(source_type, source_id)`. Each arm returns a candidate pool (`app.rag.hybrid-candidate-pool-size`, default 20); the two rankings are fused by **Reciprocal Rank Fusion** — for a candidate at 1-based rank `r` in a list, contribution `1/(k + r)` with `k = app.rag.hybrid-rrf-k` (default 60), summed across arms — and the top-k survive. The "re-rank" is this deterministic, rank-based fusion; there is **no** ML/cross-encoder re-ranker. A chunk that only the keyword arm surfaces can therefore still reach the prompt, improving recall for exact-term matches (tools, acronyms) that embeddings blur. It is **off by default** (`app.rag.hybrid-enabled=false`), preserving the vector-only baseline; enabling it requires the `V6` full-text index. Evidence shape (`ref`, `snippet`, `sourceType`, `chunkIndex`) is identical in both modes, so grounding, citation, and the `AnalysisResponse` contract are unchanged — only the candidate ordering and the internal `score` value differ.
 
 ---
 
@@ -237,4 +239,4 @@ CI/CD, environments, and profiles are detailed in `DEPLOYMENT.md`.
 | Vector store | PGVector in the same Postgres | One datastore, transactional, zero extra infra | Move to a dedicated vector DB (Qdrant/Weaviate) at large scale. |
 | LLM provider | Ollama local + OpenAI fallback | Zero-cost dev, quality on demand, provider-agnostic code | Add more providers behind the same interface. |
 | Output format | Strict validated JSON | Trust, no hallucinated free text | Add streaming (SSE) for UX in v2. |
-| Retrieval | Vector top-k in v1 | Simplest correct baseline | Hybrid + re-rank in v1.1 for precision. |
+| Retrieval | Vector top-k in v1; opt-in hybrid (vector + keyword, RRF fusion) in v1.1 | Simplest correct baseline, with a deterministic precision/recall boost available behind a config flag | Add a learned re-ranker if RRF proves insufficient. |

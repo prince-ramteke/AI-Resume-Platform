@@ -111,9 +111,17 @@ CREATE INDEX idx_chunks_embedding
     USING hnsw (embedding vector_cosine_ops);
 
 CREATE INDEX idx_chunks_source ON document_chunks (source_type, source_id);
+
+-- Full-text (keyword) index for hybrid retrieval (v1.1). Added by V6.
+-- The index expression must match the query expression ('english') to be usable.
+CREATE INDEX idx_chunks_content_fts
+    ON document_chunks
+    USING gin (to_tsvector('english', content));
 ```
 
 > HNSW gives better recall/latency than IVFFlat for this scale and needs no `lists` tuning. If you prefer IVFFlat: `USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)` and run `ANALYZE` after load.
+
+> **Hybrid retrieval (v1.1):** `idx_chunks_content_fts` backs the keyword arm of hybrid retrieval. The keyword query is `to_tsvector('english', content) @@ plainto_tsquery('english', :q)` scored by `ts_rank`, scoped by `(source_type, source_id)` exactly like the vector arm. No new column or extension is needed — full-text search is core PostgreSQL. Hybrid is off by default (`app.rag.hybrid-enabled=false`); the index is harmless when unused.
 
 ### 3.5 analyses
 ```sql
@@ -176,6 +184,7 @@ Stored on `analyses` so the verdict stays flexible without extra tables.
 - `V1__init.sql` — pgvector extension + core tables (users, resumes, job_descriptions, document_chunks, analyses)
 - `V2__resume_metadata.sql` — adds resume metadata columns (content_type, file_size, file_path, page_count, language, deleted, updated_at) and partial index
 - `V3__job_description_metadata.sql` — adds JD metadata columns (content_type, file_size, file_path, page_count, language, deleted, updated_at) and indexes (partial on active, GIN on title)
+- `V6__document_chunks_fts.sql` — adds `idx_chunks_content_fts` (GIN full-text index on `content`) for the keyword arm of hybrid retrieval (v1.1)
 - Never edit an applied migration; add a new one.
 
 ---
@@ -183,6 +192,7 @@ Stored on `analyses` so the verdict stays flexible without extra tables.
 ## 7. Indexing & performance rules
 
 - Vector search always filters by `source_type = 'RESUME'` (or JD) before/with ANN — keep `idx_chunks_source`.
+- Hybrid retrieval's keyword arm relies on `idx_chunks_content_fts`; keep the query's regconfig (`'english'`) identical to the index expression or the planner will fall back to a sequential scan.
 - Cap top-k retrieval (e.g., k=5–8) to bound LLM prompt size.
 - Cache embeddings: before embedding a document, check whether chunks already exist for `(source_type, source_id)`; skip if so.
 - Paginate all list endpoints (resumes, JDs, analyses) — never unbounded `findAll`.
