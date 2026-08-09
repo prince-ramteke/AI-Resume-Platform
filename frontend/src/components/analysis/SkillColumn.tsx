@@ -10,6 +10,8 @@ interface SkillColumnProps {
   onSelectEvidence: (evidenceRef: string) => void;
   /** Optional bucket description (one short sentence for the header). */
   description: string;
+  /** The evidenceRef currently highlighted — chips citing it get a ring. */
+  highlightedRef: string | null;
 }
 
 /**
@@ -23,6 +25,7 @@ export function SkillColumn({
   skills,
   onSelectEvidence,
   description,
+  highlightedRef,
 }: SkillColumnProps) {
   return (
     <section
@@ -45,7 +48,12 @@ export function SkillColumn({
         <ul className="flex flex-col gap-2">
           {skills.map((s, i) => (
             <li key={`${s.skill}-${i}`}>
-              <SkillChip skill={s} tone={tone} onSelect={onSelectEvidence} />
+              <SkillChip
+                skill={s}
+                tone={tone}
+                onSelect={onSelectEvidence}
+                active={highlightedRef === s.evidenceRef}
+              />
             </li>
           ))}
         </ul>

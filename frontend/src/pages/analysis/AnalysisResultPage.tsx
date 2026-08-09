@@ -217,6 +217,7 @@ export function AnalysisResultPage() {
                 skills={analysis.matchedSkills}
                 onSelectEvidence={selectEvidence}
                 description="Skills the resume already shows for this role."
+                highlightedRef={highlightedRef}
               />
               <SkillColumn
                 title="Missing"
@@ -224,6 +225,7 @@ export function AnalysisResultPage() {
                 skills={analysis.missingSkills}
                 onSelectEvidence={selectEvidence}
                 description="What the role asks for that the resume doesn't cover."
+                highlightedRef={highlightedRef}
               />
               <SkillColumn
                 title="Weak"
@@ -231,6 +233,7 @@ export function AnalysisResultPage() {
                 skills={analysis.weakSkills}
                 onSelectEvidence={selectEvidence}
                 description="Present on the resume but light on evidence."
+                highlightedRef={highlightedRef}
               />
             </div>
           </section>
