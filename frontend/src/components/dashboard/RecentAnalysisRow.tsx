@@ -1,14 +1,8 @@
 import { Link } from "react-router-dom";
 import { Badge } from "../ui";
 import { formatRelativeTime } from "../../lib/formatDate";
+import { toneForScore } from "../../lib/scoreTone";
 import type { AnalysisSummary } from "../../types/analysis";
-
-/** Score → status tone. High matches read as success, low as attention-needed. */
-function toneForScore(score: number): "success" | "warning" | "danger" {
-  if (score >= 75) return "success";
-  if (score >= 50) return "warning";
-  return "danger";
-}
 
 interface RecentAnalysisRowProps {
   analysis: AnalysisSummary;
