@@ -161,8 +161,11 @@ envelope.
   banner**, not per-field server errors.
 - **Not-owner returns `404`, not `403`** (enumeration defense) → a detail-page `404` renders
   a "not found / no longer available" empty state, **never** a permissions error.
-- **`POST /api/analyses` is synchronous and slow** (~4s p95, no async job) → that call gets a
-  **raised Axios timeout**, a blocking progress state, and explicit `422` handling.
+- **`POST /api/analyses` is synchronous and genuinely slow** — a real end-to-end
+  measurement on the local Ollama + `llama3.1:8b` stack was **~129 seconds** for one
+  analysis (2026-08-09). Treat "up to a couple of minutes" as the honest expectation, not
+  seconds. That call gets a **raised Axios timeout (240 s)**, a blocking progress state,
+  and explicit `422` handling.
 - Auth: login → `{ accessToken, tokenType, expiresAt }`; `/me` → `{ id, email, role }`;
   1-hour TTL; **no refresh token** in v1.
 - Pagination: `?page=&size=&sort=` → Spring `Page<T>` response.
@@ -364,7 +367,7 @@ routing map §5.
 |---|---|
 | TanStack Query × React 19 compatibility | Verify before adopting; pin a known-good v5; fallback to plain hooks around fetch if incompatible |
 | In-memory token → refresh logs out | Accepted; `?next=` redirect returns the user to their path |
-| Synchronous slow analysis | Raised Axios timeout on that call; blocking progress UX; explicit `422` handling |
+| Synchronous slow analysis (~129 s measured on local Ollama, not "a few seconds") | Raised Axios timeout (240 s) on that call; long-running blocking progress UX with elapsed timer, honest "up to a couple of minutes" copy, and a client-side "Stop waiting" abort (backend request still finishes server-side); explicit `422` handling |
 | Tailwind v4 is new (`@theme`, no config file) | Confirm token approach against v4 docs at M6.1 |
 | CRUD scope creep | Full CRUD is scoped intentionally; no features beyond the documented endpoints |
 | 404-as-not-found ambiguity | Codify in `parseApiError`/detail pages so 404 never reads as a permissions error |

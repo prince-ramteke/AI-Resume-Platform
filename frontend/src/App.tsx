@@ -10,6 +10,9 @@ import { ResumeListPage } from "./pages/resumes/ResumeListPage";
 import { ResumeDetailPage } from "./pages/resumes/ResumeDetailPage";
 import { JobDescriptionListPage } from "./pages/jobDescriptions/JobDescriptionListPage";
 import { JobDescriptionDetailPage } from "./pages/jobDescriptions/JobDescriptionDetailPage";
+import { NewAnalysisPage } from "./pages/analysis/NewAnalysisPage";
+import { AnalysisHistoryPage } from "./pages/analysis/AnalysisHistoryPage";
+import { AnalysisResultPage } from "./pages/analysis/AnalysisResultPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
@@ -35,14 +38,9 @@ function App() {
             path="/job-descriptions/:id"
             element={<JobDescriptionDetailPage />}
           />
-          <Route
-            path="/analyses/new"
-            element={<PlaceholderPage title="New Analysis" slice="M6.6" />}
-          />
-          <Route
-            path="/analyses"
-            element={<PlaceholderPage title="History" slice="M6.7" />}
-          />
+          <Route path="/analyses/new" element={<NewAnalysisPage />} />
+          <Route path="/analyses" element={<AnalysisHistoryPage />} />
+          <Route path="/analyses/:id" element={<AnalysisResultPage />} />
 
           {/* Reserved for a later admin area — no screen ships in M6. */}
           <Route element={<RoleRoute role="ADMIN" />}>
