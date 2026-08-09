@@ -8,6 +8,8 @@ import { RegisterPage } from "./pages/auth/RegisterPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ResumeListPage } from "./pages/resumes/ResumeListPage";
 import { ResumeDetailPage } from "./pages/resumes/ResumeDetailPage";
+import { JobDescriptionListPage } from "./pages/jobDescriptions/JobDescriptionListPage";
+import { JobDescriptionDetailPage } from "./pages/jobDescriptions/JobDescriptionDetailPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
@@ -28,9 +30,10 @@ function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/resumes" element={<ResumeListPage />} />
           <Route path="/resumes/:id" element={<ResumeDetailPage />} />
+          <Route path="/job-descriptions" element={<JobDescriptionListPage />} />
           <Route
-            path="/job-descriptions"
-            element={<PlaceholderPage title="Job Descriptions" slice="M6.5" />}
+            path="/job-descriptions/:id"
+            element={<JobDescriptionDetailPage />}
           />
           <Route
             path="/analyses/new"
