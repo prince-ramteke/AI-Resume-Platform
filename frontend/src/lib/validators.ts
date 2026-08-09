@@ -45,6 +45,30 @@ export function validateConfirm(
   return undefined;
 }
 
+/** JD title max length — mirrors backend `@Size(max = 255)` on create/update DTOs. */
+export const JD_TITLE_MAX = 255;
+
+/** JD rawText max length — mirrors backend `@Size(max = 50000)`. */
+export const JD_RAW_TEXT_MAX = 50000;
+
+/** Non-blank + ≤255 chars. Mirrors backend `@NotBlank @Size(max=255)` on title. */
+export function validateJdTitle(value: string): string | undefined {
+  const v = value.trim();
+  if (!v) return "Enter a title.";
+  if (v.length > JD_TITLE_MAX) return `Title must be ${JD_TITLE_MAX} characters or fewer.`;
+  return undefined;
+}
+
+/** Non-blank + ≤50k chars. Mirrors backend `@NotBlank @Size(max=50000)` on rawText. */
+export function validateJdRawText(value: string): string | undefined {
+  const v = value.trim();
+  if (!v) return "Enter the job description text.";
+  if (value.length > JD_RAW_TEXT_MAX) {
+    return `Text must be ${JD_RAW_TEXT_MAX.toLocaleString()} characters or fewer.`;
+  }
+  return undefined;
+}
+
 /** Resume upload limit — mirrors backend FileValidator.MAX_SIZE_BYTES (10 MB). */
 export const RESUME_MAX_BYTES = 10 * 1024 * 1024;
 
@@ -64,5 +88,26 @@ export function validateResumeFile(file: File | null): string | undefined {
   if (!hasAllowedExt) return "File must be a PDF or DOCX.";
   if (file.size === 0) return "That file is empty.";
   if (file.size > RESUME_MAX_BYTES) return "File is larger than 10 MB.";
+  return undefined;
+}
+
+/** JD upload limit — mirrors backend JdFileValidator.MAX_SIZE_BYTES (10 MB). */
+export const JD_FILE_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Accepted JD extensions — mirrors backend JdFileValidator (PDF/DOCX/TXT). */
+export const JD_FILE_ACCEPT_EXTENSIONS = [".pdf", ".docx", ".txt"] as const;
+
+/**
+ * JD file: mirrors backend JdFileValidator (PDF/DOCX/TXT, ≤10 MB). UX-only —
+ * the server still authoritatively validates content-type and magic bytes
+ * (magic bytes are skipped for TXT server-side).
+ */
+export function validateJdFile(file: File | null): string | undefined {
+  if (!file) return "Choose a PDF, DOCX, or TXT file.";
+  const name = file.name.toLowerCase();
+  const hasAllowedExt = JD_FILE_ACCEPT_EXTENSIONS.some((ext) => name.endsWith(ext));
+  if (!hasAllowedExt) return "File must be a PDF, DOCX, or TXT.";
+  if (file.size === 0) return "That file is empty.";
+  if (file.size > JD_FILE_MAX_BYTES) return "File is larger than 10 MB.";
   return undefined;
 }
