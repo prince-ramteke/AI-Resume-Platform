@@ -44,3 +44,25 @@ export function validateConfirm(
   if (confirm !== password) return "Passwords don't match.";
   return undefined;
 }
+
+/** Resume upload limit — mirrors backend FileValidator.MAX_SIZE_BYTES (10 MB). */
+export const RESUME_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Accepted resume extensions — mirrors backend FileValidator.ALLOWED_EXTENSIONS. */
+export const RESUME_ACCEPT_EXTENSIONS = [".pdf", ".docx"] as const;
+
+/**
+ * Resume file: mirrors backend FileValidator (PDF/DOCX, ≤10 MB). UX-only —
+ * the server still validates content-type and magic bytes authoritatively.
+ * We check extension + size here for immediate feedback; content sniffing is
+ * intentionally left to the backend. Returns a message, or undefined if valid.
+ */
+export function validateResumeFile(file: File | null): string | undefined {
+  if (!file) return "Choose a PDF or DOCX file.";
+  const name = file.name.toLowerCase();
+  const hasAllowedExt = RESUME_ACCEPT_EXTENSIONS.some((ext) => name.endsWith(ext));
+  if (!hasAllowedExt) return "File must be a PDF or DOCX.";
+  if (file.size === 0) return "That file is empty.";
+  if (file.size > RESUME_MAX_BYTES) return "File is larger than 10 MB.";
+  return undefined;
+}
