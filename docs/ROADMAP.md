@@ -77,7 +77,7 @@ Set up the skeleton before any feature.
 ## v1.1 — Should-have (after v1 is solid)
 - Hybrid retrieval (vector + keyword) + re-ranking.
 - Analysis result caching (same resume+JD → cached).
-- Per-user rate limiting (Bucket4j).
+- Per-user rate limiting (Bucket4j). ✅ M2 — `POST /api/analyses` only, capacity 5 / refill 5 per 15 min, in-memory (single backend instance; see `docs/SECURITY.md` §7).
 - Refresh tokens.
 - Grafana + Prometheus dashboard.
 

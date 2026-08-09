@@ -10,9 +10,11 @@ import com.princeramteke.resumeai.analysis.exception.AnalysisNotFoundException;
 import com.princeramteke.resumeai.common.exception.GlobalExceptionHandler;
 import com.princeramteke.resumeai.config.CorsConfig;
 import com.princeramteke.resumeai.config.JwtConfig;
+import com.princeramteke.resumeai.config.RateLimitProperties;
 import com.princeramteke.resumeai.config.SecurityConfig;
 import com.princeramteke.resumeai.rag.chunk.SourceType;
 import com.princeramteke.resumeai.resume.exception.ResumeNotFoundException;
+import com.princeramteke.resumeai.security.AnalysisRateLimitFilter;
 import com.princeramteke.resumeai.security.JwtAccessDeniedHandler;
 import com.princeramteke.resumeai.security.JwtAuthEntryPoint;
 import com.princeramteke.resumeai.security.JwtAuthenticationFilter;
@@ -48,12 +50,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({SecurityConfig.class, CorsConfig.class,
         JwtTokenProvider.class, JwtAuthenticationFilter.class,
         JwtAuthEntryPoint.class, JwtAccessDeniedHandler.class,
-        GlobalExceptionHandler.class})
-@EnableConfigurationProperties(JwtConfig.class)
+        GlobalExceptionHandler.class, AnalysisRateLimitFilter.class})
+@EnableConfigurationProperties({JwtConfig.class, RateLimitProperties.class})
 @TestPropertySource(properties = {
         "app.cors.allowed-origins=http://localhost:5173",
         "app.jwt.secret=test-secret-that-is-at-least-32-characters-long-for-hmac",
-        "app.jwt.expiry-minutes=60"
+        "app.jwt.expiry-minutes=60",
+        // High enough that this class's handful of POSTs per user never brush the
+        // rate limiter; that behavior is covered in its own isolated test class.
+        "app.rate-limit.analysis.capacity=1000",
+        "app.rate-limit.analysis.refill-tokens=1000",
+        "app.rate-limit.analysis.refill-period=15m"
 })
 class AnalysisControllerTest {
 

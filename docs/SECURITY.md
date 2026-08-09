@@ -103,7 +103,7 @@ Mitigations:
 | Injection (prompt) | Untrusted-data delimiting, output validation |
 | Malicious upload | Type + magic-byte + size checks, bounded parsing |
 | Sensitive data exposure | No secret logging, local-first LLM, opt-in cloud |
-| Excessive requests | Rate limiting (v1.1, Bucket4j) |
+| Excessive requests | Per-user rate limiting on `POST /api/analyses` — Bucket4j in-memory token bucket, capacity 5, refills 5 tokens/15 min (v1.1 M2) |
 
 ---
 

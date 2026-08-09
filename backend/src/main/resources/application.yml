@@ -57,6 +57,11 @@ app:
   jwt:
     secret: ${JWT_SECRET:dev-secret-replace-in-production-min-256-bits-long-string}
     expiry-minutes: ${JWT_EXPIRY_MINUTES:60}
+  rate-limit:
+    analysis:
+      capacity: ${ANALYSIS_RATE_LIMIT_CAPACITY:5}
+      refill-tokens: ${ANALYSIS_RATE_LIMIT_REFILL_TOKENS:5}
+      refill-period: ${ANALYSIS_RATE_LIMIT_REFILL_PERIOD:15m}
   storage:
     path: ${STORAGE_PATH:./uploads}
   rag:

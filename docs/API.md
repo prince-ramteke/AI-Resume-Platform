@@ -33,6 +33,7 @@
 | 409 | Conflict (e.g., email already registered) |
 | 413 | File too large |
 | 422 | LLM produced unusable output after repair retry |
+| 429 | Per-user rate limit exceeded (`POST /api/analyses` only) — `Retry-After` header included |
 | 500 | Unexpected — generic message, details logged only |
 
 ---
@@ -186,6 +187,18 @@ All analysis endpoints require authentication. Ownership is enforced in the serv
 Runs the RAG + scoring pipeline for a resume against a job description (both must be owned by the caller). Returns `201` with a `Location: /api/analyses/{id}` header.
 
 **Result cache (v1.1):** if a prior successful analysis exists for the same `(userId, resumeId, jobDescriptionId)` and was recorded after the most recent modification of both underlying documents, the endpoint returns that cached `AnalysisResponse` without re-running the pipeline. The response shape is identical to a fresh run; the `Location` header points at the pre-existing analysis id. Editing/replacing either the resume or the JD invalidates the cache naturally via each entity's `updatedAt`.
+
+**Rate limit (v1.1):** per-user token bucket — capacity 5, refilling 5 tokens every 15 minutes (in-memory, Bucket4j). Only this endpoint is limited; `GET /api/analyses` and `GET /api/analyses/{id}` are unaffected. Exceeding the limit returns `429` with a `Retry-After: <seconds>` header and the standard error envelope:
+```json
+// 429
+{
+  "timestamp": "2026-08-09T10:20:00Z",
+  "status": 429,
+  "error": "Too Many Requests",
+  "message": "You've hit the analysis rate limit. Try again in 42s.",
+  "traceId": "unknown"
+}
+```
 ```json
 // request
 { "resumeId": 12, "jobDescriptionId": 7 }
@@ -226,6 +239,7 @@ Runs the RAG + scoring pipeline for a resume against a job description (both mus
 // 401 unauthenticated
 // 404 if caller doesn't own resume or JD
 // 422 if the LLM output is unusable after one repair retry
+// 429 rate limit exceeded (5 requests / 15 min per user) — Retry-After header included
 ```
 Every `evidenceRef` in `matchedSkills`/`missingSkills`/`weakSkills` resolves to an entry in `evidence`; unsupported claims are dropped during validation, so a returned claim is always grounded.
 

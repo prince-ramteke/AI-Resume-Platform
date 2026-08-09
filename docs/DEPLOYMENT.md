@@ -29,6 +29,11 @@ DB_PASSWORD=change_me
 JWT_SECRET=replace_with_a_long_random_256bit_secret
 JWT_EXPIRY_MINUTES=60
 
+# Rate limiting (POST /api/analyses only; in-memory Bucket4j, per user)
+ANALYSIS_RATE_LIMIT_CAPACITY=5
+ANALYSIS_RATE_LIMIT_REFILL_TOKENS=5
+ANALYSIS_RATE_LIMIT_REFILL_PERIOD=15m
+
 # LLM
 LLM_PROVIDER=ollama            # ollama | openai
 LLM_FALLBACK_ENABLED=true

@@ -3,10 +3,12 @@ package com.princeramteke.resumeai.jobdescription;
 import com.princeramteke.resumeai.common.exception.GlobalExceptionHandler;
 import com.princeramteke.resumeai.config.CorsConfig;
 import com.princeramteke.resumeai.config.JwtConfig;
+import com.princeramteke.resumeai.config.RateLimitProperties;
 import com.princeramteke.resumeai.config.SecurityConfig;
 import com.princeramteke.resumeai.jobdescription.dto.JobDescriptionResponse;
 import com.princeramteke.resumeai.jobdescription.dto.JobDescriptionSummaryResponse;
 import com.princeramteke.resumeai.jobdescription.exception.JobDescriptionNotFoundException;
+import com.princeramteke.resumeai.security.AnalysisRateLimitFilter;
 import com.princeramteke.resumeai.security.JwtAccessDeniedHandler;
 import com.princeramteke.resumeai.security.JwtAuthEntryPoint;
 import com.princeramteke.resumeai.security.JwtAuthenticationFilter;
@@ -39,8 +41,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({SecurityConfig.class, CorsConfig.class,
         JwtTokenProvider.class, JwtAuthenticationFilter.class,
         JwtAuthEntryPoint.class, JwtAccessDeniedHandler.class,
-        GlobalExceptionHandler.class})
-@EnableConfigurationProperties(JwtConfig.class)
+        GlobalExceptionHandler.class, AnalysisRateLimitFilter.class})
+@EnableConfigurationProperties({JwtConfig.class, RateLimitProperties.class})
 @TestPropertySource(properties = {
         "app.cors.allowed-origins=http://localhost:5173",
         "app.jwt.secret=test-secret-that-is-at-least-32-characters-long-for-hmac",

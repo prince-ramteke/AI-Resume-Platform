@@ -24,6 +24,7 @@
         <jjwt.version>0.12.6</jjwt.version>
         <tika.version>2.9.2</tika.version>
         <mapstruct.version>1.6.3</mapstruct.version>
+        <bucket4j.version>8.10.1</bucket4j.version>
     </properties>
 
     <dependencies>
@@ -96,6 +97,13 @@
             <groupId>org.mapstruct</groupId>
             <artifactId>mapstruct</artifactId>
             <version>${mapstruct.version}</version>
+        </dependency>
+
+        <!-- Bucket4j (in-memory per-user rate limiting) -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j-core</artifactId>
+            <version>${bucket4j.version}</version>
         </dependency>
 
         <!-- JWT -->
