@@ -13,7 +13,17 @@
 - A `JwtAuthenticationFilter` runs before `UsernamePasswordAuthenticationFilter`, validates the token, and populates the `SecurityContext`.
 - `JWT_SECRET` comes from env, is ≥256-bit, and is never committed. Rotate by changing the secret (invalidates all tokens).
 
-> Refresh tokens are a v1.1 item. v1 keeps a single short-lived access token to stay simple.
+### 1.1 Refresh Tokens (v1.1)
+
+Refresh tokens enable clients to obtain a new access token without re-entering credentials, improving UX for long-lived client sessions while keeping access token TTL short.
+
+- **Generation:** On login, generate a cryptographically random 32-byte token and hash it with SHA-256 before persisting. The plaintext token is returned once to the client; the hash is stored in the database.
+- **Storage:** Persisted in the `refresh_tokens` table with a unique `token_hash`, associated `user_id`, and `expires_at` timestamp (default 7 days). The plaintext is never logged or exposed.
+- **Public endpoints:** `/api/auth/refresh` and `/api/auth/logout` are public (`permitAll`) because the refresh token itself is the credential. No access token is required.
+- **Ownership:** The user is identified from the refresh-token record in the database, not from an access token. This allows refresh to work even if the access token has expired.
+- **Rotation:** On refresh, the old token is revoked (`revoked_at` set), and a new token is issued. Both tokens share a `family_id` UUID, allowing future detection of token-reuse attacks.
+- **Revocation:** On logout, the refresh token is marked revoked. Queries filter to active tokens: `WHERE revoked_at IS NULL AND expires_at > now()`.
+- **Cascade:** Deleting a user automatically revokes all their refresh tokens via `ON DELETE CASCADE`.
 
 ---
 

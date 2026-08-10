@@ -10,7 +10,7 @@
 - Base path: `/api`
 - Format: JSON. Auth: `Authorization: Bearer <JWT>` on all routes except the public ones below.
 - IDs are numeric (`Long`). Timestamps are ISO-8601 UTC.
-- **Public (no auth):** `POST /api/auth/register`, `POST /api/auth/login`, `GET /actuator/health`, Swagger.
+- **Public (no auth):** `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /actuator/health`, Swagger.
 - Pagination: `?page=0&size=20&sort=createdAt,desc` → Spring `Page` response.
 
 ### Standard error envelope
@@ -54,12 +54,47 @@
 // request
 { "email": "prince@example.com", "password": "StrongPass!23" }
 // 200
-{ "accessToken": "eyJhbGciOi...", "tokenType": "Bearer", "expiresAt": "2026-08-05T11:15:30Z" }
+{ "accessToken": "eyJhbGciOi...", "tokenType": "Bearer", "expiresAt": "2026-08-05T11:15:30Z",
+  "refreshToken": "AbCdEf1234...", "refreshExpiresAt": "2026-08-12T10:15:30Z" }
 // 401 on bad credentials
 ```
 
+Returns both an access token (for subsequent API calls) and a refresh token (for obtaining a new access token). The `tokenType` is always `"Bearer"`. Timestamps are ISO-8601 UTC.
+
+### POST /api/auth/refresh
+**Public endpoint; no access token required.**
+
+Refresh an expired or soon-to-expire access token using a refresh token. The refresh token credential is presented in the request body; ownership is derived from the stored refresh-token record, so this endpoint does not require a valid/unexpired access token.
+
+```json
+// request
+{ "refreshToken": "AbCdEf1234..." }
+// 200 (same as login)
+{ "accessToken": "eyJhbGciOi...", "tokenType": "Bearer", "expiresAt": "2026-08-05T11:15:30Z",
+  "refreshToken": "NeWtOkEn5678...", "refreshExpiresAt": "2026-08-12T10:15:30Z" }
+// 400 if refresh token is missing or malformed
+// 401 if refresh token is invalid, expired, or revoked
+```
+
+On success, returns a new access token and a new refresh token. The old refresh token is revoked and cannot be reused; the rotation uses the same `familyId` for session tracking. Timestamp format: ISO-8601 UTC.
+
+### POST /api/auth/logout
+**Public endpoint; no access token required.**
+
+Revoke a refresh token (logout). The refresh token is presented in the request body as the credential.
+
+```json
+// request
+{ "refreshToken": "AbCdEf1234..." }
+// 204 No Content
+// 400 if refresh token is missing or malformed
+// 401 if refresh token is invalid, expired, or already revoked
+```
+
+On success, the refresh token is marked as revoked and cannot be used for future refresh operations.
+
 ### GET /api/auth/me
-Returns the current user. `200 { id, email, role }`.
+Returns the current user. Requires a valid, unexpired access token. `200 { id, email, role }`.
 
 ---
 

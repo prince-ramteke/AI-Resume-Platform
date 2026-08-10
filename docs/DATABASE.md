@@ -144,6 +144,44 @@ CREATE TABLE analyses (
 CREATE INDEX idx_analyses_user ON analyses (user_id, created_at DESC);
 ```
 
+> The `V4__analysis_cache_index.sql` migration adds a composite index on `(user_id, resume_id, job_description_id, created_at DESC)` to support efficient cache lookups.
+
+### 3.6 refresh_tokens (v1.1)
+```sql
+CREATE TABLE refresh_tokens (
+    id            BIGSERIAL PRIMARY KEY,
+    user_id       BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash    VARCHAR(64)  NOT NULL UNIQUE,         -- SHA-256 hash, never plaintext
+    family_id     VARCHAR(36)  NOT NULL,                -- preserves identity across rotation
+    issued_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    expires_at    TIMESTAMPTZ  NOT NULL,
+    revoked_at    TIMESTAMPTZ,                          -- null if active, set on logout/rotation
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_refresh_tokens_user ON refresh_tokens (user_id);
+CREATE INDEX idx_refresh_tokens_token_hash ON refresh_tokens (token_hash);
+CREATE INDEX idx_refresh_tokens_family ON refresh_tokens (family_id);
+```
+
+Stores opaque refresh tokens (hashed) for session management (v1.1). Refresh tokens enable clients to obtain new access tokens without re-entering credentials.
+
+- `token_hash`: SHA-256 hash of the random token. The plaintext token is never persisted — only the hash is stored. Clients present the plaintext token; the service hashes it and compares.
+- `family_id`: A UUID that persists across token rotations, allowing the service to track a logical "session" or "device" (useful for detecting token reuse attacks or implementing device-level revocation in future).
+- `issued_at`: When the token was generated.
+- `expires_at`: When the token becomes invalid (typically 7 days after issuance).
+- `revoked_at`: Set to the current time when the token is revoked (on logout or after rotation). Queries filter to `WHERE revoked_at IS NULL AND expires_at > now()` to find live tokens.
+- `user_id` references `users` with `ON DELETE CASCADE`, so deleting a user automatically revokes all their refresh tokens.
+
+**Lifecycle:**
+1. On login, generate a 32-byte random token, hash it with SHA-256, and insert into the table with a unique `family_id`.
+2. Return the plaintext token (once) to the client; the client stores it securely (e.g., in memory, HTTP-only cookie, or secure storage).
+3. On refresh, the client sends the plaintext token; the service hashes it, queries for a matching `token_hash` that is active, and issues a new access token plus a new refresh token (with the same `family_id` but a new hash).
+4. The old refresh token is revoked by setting `revoked_at`.
+5. On logout, revoke the refresh token by setting `revoked_at`.
+
+> The `V5__refresh_tokens.sql` migration adds this table (M3, v1.1).
+
 ---
 
 ## 4. JSONB payload shapes
