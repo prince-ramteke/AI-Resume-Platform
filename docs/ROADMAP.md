@@ -75,11 +75,11 @@ Set up the skeleton before any feature.
 ---
 
 ## v1.1 — Should-have (after v1 is solid)
-- Hybrid retrieval (vector + keyword) + re-ranking.
-- Analysis result caching (same resume+JD → cached).
+- Hybrid retrieval (vector + keyword) + re-ranking. ✅ — RRF fusion, opt-in via `app.rag.hybrid-enabled` (default off); keyword arm uses the V6 full-text index.
+- Analysis result caching (same resume+JD → cached). ✅
 - Per-user rate limiting (Bucket4j). ✅ M2 — `POST /api/analyses` only, capacity 5 / refill 5 per 15 min, in-memory (single backend instance; see `docs/SECURITY.md` §7).
-- Refresh tokens.
-- Grafana + Prometheus dashboard.
+- Refresh tokens. ✅
+- Grafana + Prometheus dashboard. ✅ — Micrometer → `/actuator/prometheus` (separate unpublished port 9091) → Prometheus → provisioned Grafana dashboard; metrics: analysis count/latency, LLM latency + token usage.
 
 ## v2 — Stretch
 - Recruiter batch mode (1 JD × N resumes, ranked).

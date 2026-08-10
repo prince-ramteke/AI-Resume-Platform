@@ -35,7 +35,12 @@ services:
       # Persisted upload location; matches the named volume mounted below so
       # uploaded resumes/JDs survive container recreation (DB rows store paths).
       STORAGE_PATH: /app/uploads
+      # Actuator/metrics run on a separate management port that is deliberately NOT
+      # published in `ports:` below — Prometheus scrapes it over the internal network
+      # only. Fixed to 9091 to match monitoring/prometheus.yml.
+      MANAGEMENT_SERVER_PORT: 9091
     ports:
+      # Only the application port is exposed to the host. 9091 (management) is intentionally omitted.
       - "8080:8080"
     volumes:
       - uploads:/app/uploads
@@ -52,6 +57,31 @@ services:
     depends_on:
       - backend
 
+  # --- Observability (v1.1). Scrapes the backend's unpublished management port (9091). ---
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      # Anonymous access disabled; admin password supplied via env (dev default only).
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+# No grafana-data volume by decision — dashboards are provisioned from source-controlled files.
 volumes:
   pgdata:
   ollama:

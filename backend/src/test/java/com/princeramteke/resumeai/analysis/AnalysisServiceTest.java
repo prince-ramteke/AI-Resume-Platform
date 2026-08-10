@@ -29,6 +29,7 @@ import com.princeramteke.resumeai.rag.retrieval.RetrievalService;
 import com.princeramteke.resumeai.resume.Resume;
 import com.princeramteke.resumeai.resume.ResumeRepository;
 import com.princeramteke.resumeai.resume.exception.ResumeNotFoundException;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -84,6 +85,7 @@ class AnalysisServiceTest {
     private VerdictParser verdictParser;
     private OutputValidator outputValidator;
     private AnalysisMapper mapper;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
@@ -93,12 +95,27 @@ class AnalysisServiceTest {
         verdictParser = new VerdictParser();
         outputValidator = new OutputValidator();
         mapper = org.mapstruct.factory.Mappers.getMapper(AnalysisMapper.class);
+        meterRegistry = new SimpleMeterRegistry();
     }
 
     private AnalysisService service(LlmClient llm) {
         return new AnalysisService(resumeRepository, jobDescriptionRepository, analysisRepository,
                 ingestionService, retrievalService, textChunker, promptFactory, llm,
-                verdictParser, outputValidator, mapper);
+                verdictParser, outputValidator, mapper, meterRegistry);
+    }
+
+    /** analysis.count value for one (result, cache) tag combination; 0.0 if the meter is absent. */
+    private double analysisCount(String result, String cache) {
+        var counter = meterRegistry.find("analysis.count")
+                .tag("result", result).tag("cache", cache).counter();
+        return counter == null ? 0.0 : counter.count();
+    }
+
+    /** llm.tokens value for one (provider, type) tag combination; 0.0 if the meter is absent. */
+    private double tokenCount(String provider, String type) {
+        var counter = meterRegistry.find("llm.tokens")
+                .tag("provider", provider).tag("type", type).counter();
+        return counter == null ? 0.0 : counter.count();
     }
 
     // Fixed base timestamps for deterministic cache-freshness tests. Anything
@@ -313,6 +330,8 @@ class AnalysisServiceTest {
         stubOwnedResumeAndJd();
         stubRetrieval();
         LlmClient failing = mock(LlmClient.class);
+        // providerName tags the llm.latency timer (recorded even when complete() fails).
+        when(failing.providerName()).thenReturn("ollama");
         when(failing.complete(any())).thenThrow(new LlmException("provider unreachable"));
 
         assertThatThrownBy(() -> service(failing).analyze(request(), USER_ID))
@@ -410,5 +429,84 @@ class AnalysisServiceTest {
             assertThat(s.score()).isEqualTo(65);
             assertThat(s.jobTitle()).isEqualTo("Backend Engineer");
         });
+    }
+
+    // ---------------------------------------------------------------------
+    // Observability metrics (v1.1) — purely additive; no behavior change.
+    // ---------------------------------------------------------------------
+
+    @Test
+    void metrics_successfulCacheMiss_incrementsSuccessMissAndRecordsLatency() {
+        stubOwnedResumeAndJd();
+        stubRetrieval();
+        stubSaveReturnsArgument();
+
+        service(new FakeLlmClient(VALID_VERDICT)).analyze(request(), USER_ID);
+
+        assertThat(analysisCount("success", "miss")).isEqualTo(1.0);
+        assertThat(analysisCount("success", "hit")).isZero();
+        assertThat(analysisCount("failure", "miss")).isZero();
+        // The pipeline latency timer recorded exactly one sample.
+        assertThat(meterRegistry.find("analysis.latency").timer().count()).isEqualTo(1L);
+    }
+
+    @Test
+    void metrics_cacheHit_incrementsSuccessHitAndSkipsLatencyTimer() {
+        stubOwnedResumeAndJd();
+        Analysis cached = new Analysis(
+                new User("prince@example.com", "hash"), resume(), jobDescription(),
+                88, "cached summary",
+                List.of(new SkillClaim("Cached Skill", "HIGH", "RESUME#0")),
+                List.of(), List.of(),
+                List.of(new Recommendation("cached rec", "HIGH", "cached reason")),
+                List.of(new Evidence("RESUME#0", SourceType.RESUME, 0, "cached snippet")),
+                "ollama", 4200);
+        ReflectionTestUtils.setField(cached, "id", 55L);
+        ReflectionTestUtils.setField(cached, "createdAt", JD_CREATED_AT.plusSeconds(60));
+        when(analysisRepository
+                .findFirstByUserIdAndResumeIdAndJobDescriptionIdAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+                        USER_ID, RESUME_ID, JD_ID, JD_CREATED_AT))
+                .thenReturn(Optional.of(cached));
+
+        service(new FakeLlmClient(VALID_VERDICT)).analyze(request(), USER_ID);
+
+        assertThat(analysisCount("success", "hit")).isEqualTo(1.0);
+        assertThat(analysisCount("success", "miss")).isZero();
+        // Cache hit short-circuits before the pipeline timer — no latency sample recorded.
+        assertThat(meterRegistry.find("analysis.latency").timer().count()).isZero();
+    }
+
+    @Test
+    void metrics_analysisFailure_incrementsFailureMissAndPropagatesOriginalException() {
+        stubOwnedResumeAndJd();
+        stubRetrieval();
+        LlmClient failing = mock(LlmClient.class);
+        when(failing.providerName()).thenReturn("ollama");
+        when(failing.complete(any())).thenThrow(new LlmException("provider unreachable"));
+
+        assertThatThrownBy(() -> service(failing).analyze(request(), USER_ID))
+                .isInstanceOf(LlmException.class)
+                .hasMessage("provider unreachable");
+
+        assertThat(analysisCount("failure", "miss")).isEqualTo(1.0);
+        assertThat(analysisCount("success", "miss")).isZero();
+        assertThat(analysisCount("success", "hit")).isZero();
+        verify(analysisRepository, never()).save(any());
+    }
+
+    @Test
+    void metrics_llmLatencyAndTokens_recordExactValuesAndProviderLabel() {
+        stubOwnedResumeAndJd();
+        stubRetrieval();
+        stubSaveReturnsArgument();
+        // Known token usage from the fake provider; provider label is "fake".
+        service(new FakeLlmClient(VALID_VERDICT, 123, 45)).analyze(request(), USER_ID);
+
+        // 4: LLM latency timer records at least the single completion call.
+        assertThat(meterRegistry.find("llm.latency").tag("provider", "fake").timer().count())
+                .isEqualTo(1L);
+        // 5 + 6: prompt/completion counters receive the exact LlmResponse values under the right labels.
+        assertThat(tokenCount("fake", "prompt")).isEqualTo(123.0);
+        assertThat(tokenCount("fake", "completion")).isEqualTo(45.0);
     }
 }

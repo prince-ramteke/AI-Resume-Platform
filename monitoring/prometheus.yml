@@ -1,0 +1,15 @@
+# Prometheus scrape config for the AI Resume Platform (v1.1 observability).
+# Scrapes the backend's Micrometer/Actuator endpoint over the internal Docker network.
+# The backend's management port (9091) is NOT published to the host — only reachable
+# from within the compose network, so metrics are never internet-exposed.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: resume-ai-backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["backend:9091"]
+        labels:
+          application: resume-ai

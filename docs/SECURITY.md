@@ -27,6 +27,8 @@ Roles: **USER** (default) and **ADMIN**.
 | `/api/resumes/**`, `/api/job-descriptions/**`, `/api/analyses/**` | Authenticated (USER or ADMIN) |
 | `/api/admin/**` | ADMIN only (`@PreAuthorize("hasRole('ADMIN')")`) |
 
+**Metrics endpoint (v1.1):** `/actuator/prometheus` is **not** served on the application port (`8080`) and is **not** in the `permitAll()` whitelist. Actuator runs on a separate management port (`9091`) that Docker Compose deliberately does **not** publish to the host — Prometheus scrapes it over the internal network only. So metrics are network-isolated rather than app-authenticated, and no change to the JWT filter chain was needed. Metric labels are strictly bounded (`result`, `cache`, `provider`, `type`) — never user IDs, emails, resume/JD IDs, or document/prompt text.
+
 **Ownership checks** are enforced in the service layer beyond role checks: a USER can only read/delete resumes, JDs, and analyses whose `user_id` matches their token. Requesting a resource that doesn't exist **or** that belongs to another user → **`404`** (not `403`). This prevents enumeration attacks — an attacker cannot distinguish "exists but not mine" from "does not exist."
 
 ### Admin bootstrap

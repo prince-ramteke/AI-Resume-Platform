@@ -203,7 +203,7 @@ See `DATABASE.md` for exact DDL and the PGVector extension setup.
 | **AuthN/Z** | Spring Security 6 filter chain; stateless JWT; method-level `@PreAuthorize` for RBAC. |
 | **Validation** | Bean Validation on all request DTOs; fail fast with 400. |
 | **Error handling** | `@RestControllerAdvice` global handler → consistent error envelope `{timestamp, status, error, message, traceId}`. |
-| **Observability** | Micrometer metrics (LLM latency, token usage, analysis count); `/actuator/health`; trace id per request in logs. |
+| **Observability** | Micrometer metrics — analysis count (by result + cache), analysis latency, LLM latency (by provider), LLM token usage (by provider + type) — exported at `/actuator/prometheus` and visualized in Grafana (v1.1); `/actuator/health`; trace id per request in logs. Actuator runs on a separate, unpublished management port (`9091`) scraped by Prometheus over the internal network (see DEPLOYMENT.md §8). |
 | **Config** | Externalized via env vars + Spring profiles (`dev`, `docker`, `test`). Secrets never in source. |
 | **Security of prompts** | Uploaded text delimited and labeled as untrusted data in the prompt; system instructions isolated. |
 

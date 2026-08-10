@@ -52,6 +52,9 @@ ADMIN_PASSWORD=$2a$10$...      # pre-hashed BCrypt
 
 # Frontend
 FRONTEND_ORIGIN=http://localhost:5173
+
+# Observability (Grafana admin login; dev default only)
+GRAFANA_ADMIN_PASSWORD=admin
 ```
 
 Commit `.env.example` only. `.env` is git-ignored.
@@ -166,3 +169,26 @@ If you later want a public demo URL: deploy the frontend to a static host and th
 | Analysis 503/slow | Ollama up + models pulled? consider OpenAI fallback for demo |
 | Vector search empty | chunks embedded? extension created? index built? |
 | CORS error in UI | `FRONTEND_ORIGIN` matches the actual origin |
+| Grafana panels empty | Prometheus target `backend:9091` UP? has an analysis run yet to emit metrics? |
+
+---
+
+## 8. Observability (Prometheus + Grafana) — v1.1
+
+Metrics pipeline: **Micrometer → `/actuator/prometheus` → Prometheus → Grafana.**
+
+- **Backend management port `9091`** — Actuator (incl. `prometheus`) runs on a **separate port** (`management.server.port: 9091`) that is **NOT published** to the host in Compose. It is reachable only over the internal Docker network, so metrics are never internet-exposed and no auth change to the app (`8080`) is required. The port is fixed to match `monitoring/prometheus.yml`.
+- **Prometheus** (`:9090`) scrapes `backend:9091/actuator/prometheus` every 15s. Config: `monitoring/prometheus.yml` (mounted read-only).
+- **Grafana** (`:3000`) — anonymous access disabled, admin password via `GRAFANA_ADMIN_PASSWORD`. Datasource + one dashboard are **provisioned from source-controlled files** under `monitoring/grafana/` (no persistent volume — the dashboard is code).
+- **Dashboard** (`monitoring/grafana/dashboards/resume-ai.json`): analysis throughput, success rate, cache-hit rate, analysis latency p50/p95, LLM latency p50/p95 by provider, prompt/completion token rate, plus JVM heap.
+
+Application metrics emitted (bounded, low-cardinality labels only):
+
+| Metric | Type | Labels |
+|---|---|---|
+| `analysis_count_total` | counter | `result` (success\|failure), `cache` (hit\|miss) |
+| `analysis_latency_seconds` | timer (histogram) | — |
+| `llm_latency_seconds` | timer (histogram) | `provider` (ollama\|openai) |
+| `llm_tokens_total` | counter | `provider`, `type` (prompt\|completion) |
+
+Run: `docker-compose up --build` → Grafana on :3000 (login `admin` / `$GRAFANA_ADMIN_PASSWORD`), Prometheus on :9090. Metrics appear after the first analysis runs.

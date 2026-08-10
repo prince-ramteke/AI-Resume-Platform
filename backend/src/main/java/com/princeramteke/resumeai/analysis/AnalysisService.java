@@ -19,7 +19,11 @@ import com.princeramteke.resumeai.jobdescription.JobDescriptionRepository;
 import com.princeramteke.resumeai.jobdescription.exception.JobDescriptionNotFoundException;
 import com.princeramteke.resumeai.llm.LlmClient;
 import com.princeramteke.resumeai.llm.LlmRequest;
+import com.princeramteke.resumeai.llm.LlmResponse;
 import com.princeramteke.resumeai.rag.chunk.SourceType;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import com.princeramteke.resumeai.rag.chunking.TextChunker;
 import com.princeramteke.resumeai.rag.ingestion.IngestionService;
 import com.princeramteke.resumeai.rag.retrieval.ChunkEvidence;
@@ -76,6 +80,10 @@ public class AnalysisService {
     private final OutputValidator outputValidator;
     private final AnalysisMapper analysisMapper;
 
+    /** Observability (v1.1): purely additive metrics — see docs/SYSTEM_ARCHITECTURE.md §8. */
+    private final MeterRegistry meterRegistry;
+    private final Timer analysisLatencyTimer;
+
     public AnalysisService(ResumeRepository resumeRepository,
                            JobDescriptionRepository jobDescriptionRepository,
                            AnalysisRepository analysisRepository,
@@ -86,7 +94,8 @@ public class AnalysisService {
                            LlmClient llmClient,
                            VerdictParser verdictParser,
                            OutputValidator outputValidator,
-                           AnalysisMapper analysisMapper) {
+                           AnalysisMapper analysisMapper,
+                           MeterRegistry meterRegistry) {
         this.resumeRepository = resumeRepository;
         this.jobDescriptionRepository = jobDescriptionRepository;
         this.analysisRepository = analysisRepository;
@@ -98,6 +107,10 @@ public class AnalysisService {
         this.verdictParser = verdictParser;
         this.outputValidator = outputValidator;
         this.analysisMapper = analysisMapper;
+        this.meterRegistry = meterRegistry;
+        this.analysisLatencyTimer = Timer.builder("analysis.latency")
+                .description("End-to-end latency of the analysis pipeline (cache-miss path)")
+                .register(meterRegistry);
     }
 
     public AnalysisResponse analyze(AnalysisRequest request, Long userId) {
@@ -125,45 +138,59 @@ public class AnalysisService {
             Analysis hit = cached.get();
             log.info("Analysis cache HIT: userId={}, analysisId={}, resumeId={}, jobDescriptionId={}",
                     userId, hit.getId(), resume.getId(), jd.getId());
+            countAnalysis("success", "hit");
             return analysisMapper.toResponse(hit);
         }
 
-        // 4: resume ingestion (idempotent; embeddings run outside any DB transaction)
-        ingestionService.ingest(SourceType.RESUME, resume.getId(), resume.getRawText());
+        // The metered pipeline is the cache-miss path only (the "actual analysis"). Ownership
+        // failures above are 404s, not analysis outcomes, so they are intentionally unmetered.
+        Timer.Sample pipelineSample = Timer.start(meterRegistry);
+        try {
+            // 4: resume ingestion (idempotent; embeddings run outside any DB transaction)
+            ingestionService.ingest(SourceType.RESUME, resume.getId(), resume.getRawText());
 
-        // 5: retrieval — resume chunks nearest to the JD text (JD is the query, not embedded)
-        List<ChunkEvidence> resumeEvidence = retrievalService.retrieve(
-                SourceType.RESUME, resume.getId(), jd.getRawText());
+            // 5: retrieval — resume chunks nearest to the JD text (JD is the query, not embedded)
+            List<ChunkEvidence> resumeEvidence = retrievalService.retrieve(
+                    SourceType.RESUME, resume.getId(), jd.getRawText());
 
-        // JD chunked in-memory for grounding only (JD#n tags); never embedded or stored
-        List<ChunkEvidence> jdEvidence = chunkJobDescription(jd.getRawText());
+            // JD chunked in-memory for grounding only (JD#n tags); never embedded or stored
+            List<ChunkEvidence> jdEvidence = chunkJobDescription(jd.getRawText());
 
-        // 6: prompt assembly (system rubric isolated; evidence delimited as untrusted)
-        LlmRequest prompt = promptFactory.build(jdEvidence, resumeEvidence);
+            // 6: prompt assembly (system rubric isolated; evidence delimited as untrusted)
+            LlmRequest prompt = promptFactory.build(jdEvidence, resumeEvidence);
 
-        // 7-9: LLM completion -> parse -> validate/ground, with one stricter repair retry
-        Map<String, ChunkEvidence> evidencePool = indexByRef(jdEvidence, resumeEvidence);
-        long startNanos = System.nanoTime();
-        LlmVerdict verdict = synthesize(prompt, evidencePool.keySet());
-        int latencyMs = (int) ((System.nanoTime() - startNanos) / 1_000_000L);
+            // 7-9: LLM completion -> parse -> validate/ground, with one stricter repair retry
+            Map<String, ChunkEvidence> evidencePool = indexByRef(jdEvidence, resumeEvidence);
+            long startNanos = System.nanoTime();
+            LlmVerdict verdict = synthesize(prompt, evidencePool.keySet());
+            int latencyMs = (int) ((System.nanoTime() - startNanos) / 1_000_000L);
 
-        // 10: persist (the single DB write; committed in the repository's own transaction)
-        Analysis analysis = new Analysis(
-                resume.getUser(), resume, jd,
-                verdict.score(), verdict.summary(),
-                toModelSkills(verdict.matchedSkills()),
-                toModelSkills(verdict.missingSkills()),
-                toModelSkills(verdict.weakSkills()),
-                toModelRecommendations(verdict.recommendations()),
-                citedEvidence(verdict, evidencePool),
-                llmClient.providerName(), latencyMs);
-        Analysis saved = analysisRepository.save(analysis);
+            // 10: persist (the single DB write; committed in the repository's own transaction)
+            Analysis analysis = new Analysis(
+                    resume.getUser(), resume, jd,
+                    verdict.score(), verdict.summary(),
+                    toModelSkills(verdict.matchedSkills()),
+                    toModelSkills(verdict.missingSkills()),
+                    toModelSkills(verdict.weakSkills()),
+                    toModelRecommendations(verdict.recommendations()),
+                    citedEvidence(verdict, evidencePool),
+                    llmClient.providerName(), latencyMs);
+            Analysis saved = analysisRepository.save(analysis);
 
-        log.info("Analysis finished: userId={}, analysisId={}, score={}, provider={}, latencyMs={}",
-                userId, saved.getId(), saved.getScore(), saved.getProvider(), latencyMs);
+            log.info("Analysis finished: userId={}, analysisId={}, score={}, provider={}, latencyMs={}",
+                    userId, saved.getId(), saved.getScore(), saved.getProvider(), latencyMs);
 
-        // 11: map to DTO
-        return analysisMapper.toResponse(saved);
+            // 11: map to DTO
+            AnalysisResponse response = analysisMapper.toResponse(saved);
+            countAnalysis("success", "miss");
+            return response;
+        } catch (RuntimeException e) {
+            // Rethrow the original exception unchanged; the metric is the only addition.
+            countAnalysis("failure", "miss");
+            throw e;
+        } finally {
+            pipelineSample.stop(analysisLatencyTimer);
+        }
     }
 
     public AnalysisResponse getAnalysis(Long id, Long userId, boolean isAdmin) {
@@ -186,17 +213,57 @@ public class AnalysisService {
     /** LLM completion, parse and validation with exactly one stricter repair retry. */
     private LlmVerdict synthesize(LlmRequest prompt, Set<String> validRefs) {
         try {
-            return parseAndValidate(llmClient.complete(prompt).content(), validRefs);
+            return parseAndValidate(timedComplete(prompt).content(), validRefs);
         } catch (InvalidVerdictException first) {
             log.warn("Verdict unusable ({}); retrying once with a stricter prompt", first.getMessage());
             LlmRequest repair = new LlmRequest(prompt.systemPrompt(), prompt.userPrompt() + REPAIR_REMINDER);
             try {
-                return parseAndValidate(llmClient.complete(repair).content(), validRefs);
+                return parseAndValidate(timedComplete(repair).content(), validRefs);
             } catch (InvalidVerdictException second) {
                 throw new AnalysisFailedException(
                         "LLM produced unusable output after one repair retry", second);
             }
         }
+    }
+
+    /**
+     * Wraps a single {@link LlmClient#complete} call with the {@code llm.latency} timer (tagged
+     * by provider) and records prompt/completion token usage. The provider tag comes from the
+     * client itself, never user input. Behavior is otherwise identical to a direct call.
+     */
+    private LlmResponse timedComplete(LlmRequest request) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        LlmResponse response;
+        try {
+            response = llmClient.complete(request);
+        } finally {
+            sample.stop(Timer.builder("llm.latency")
+                    .description("Latency of a single LLM chat completion call")
+                    .tag("provider", llmClient.providerName())
+                    .register(meterRegistry));
+        }
+        recordTokens(response);
+        return response;
+    }
+
+    /** Count prompt and completion tokens separately, from the model's reported usage. */
+    private void recordTokens(LlmResponse response) {
+        String provider = llmClient.providerName();
+        Counter.builder("llm.tokens").baseUnit("tokens")
+                .description("LLM tokens consumed, by provider and type")
+                .tag("provider", provider).tag("type", "prompt")
+                .register(meterRegistry).increment(response.promptTokens());
+        Counter.builder("llm.tokens").baseUnit("tokens")
+                .tag("provider", provider).tag("type", "completion")
+                .register(meterRegistry).increment(response.completionTokens());
+    }
+
+    /** Increment the analysis outcome counter. Tags are bounded: result and cache disposition. */
+    private void countAnalysis(String result, String cache) {
+        Counter.builder("analysis.count")
+                .description("Number of analyses by outcome and cache disposition")
+                .tag("result", result).tag("cache", cache)
+                .register(meterRegistry).increment();
     }
 
     private LlmVerdict parseAndValidate(String raw, Set<String> validRefs) {
