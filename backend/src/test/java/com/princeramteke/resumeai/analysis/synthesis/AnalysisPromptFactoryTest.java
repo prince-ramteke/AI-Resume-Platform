@@ -18,7 +18,8 @@ class AnalysisPromptFactoryTest {
 
     @BeforeEach
     void setUp() {
-        factory = new AnalysisPromptFactory(new PromptAssembler(new RagConfig(500, 50, 8, 3500)));
+        factory = new AnalysisPromptFactory(new PromptAssembler(new RagConfig(500, 50, 8, 3500),
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     private List<ChunkEvidence> jdEvidence() {

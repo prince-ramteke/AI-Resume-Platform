@@ -5,6 +5,10 @@ import com.princeramteke.resumeai.rag.chunk.ChunkSimilarity;
 import com.princeramteke.resumeai.rag.chunk.DocumentChunkRepository;
 import com.princeramteke.resumeai.rag.chunk.SourceType;
 import com.princeramteke.resumeai.rag.embedding.EmbeddingClient;
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tag;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -31,14 +36,26 @@ class RetrievalServiceTest {
     @Mock
     private EmbeddingClient embeddingClient;
 
+    private MeterRegistry meterRegistry;
     private RetrievalService service;
 
     private static final Long RESUME_ID = 7L;
 
+    // ---------------------------------------------------------------------
+    // Approved bounded tag universes (v1.2.M1). Tests assert emitted meters
+    // never carry values outside these sets.
+    // ---------------------------------------------------------------------
+    private static final Set<String> ALLOWED_ARM_VALUES =
+            Set.of("vector", "keyword", "fuse", "total", "both");
+    private static final Set<String> ALLOWED_MODE_VALUES = Set.of("vector", "hybrid");
+    private static final Set<String> ALLOWED_REASON_VALUES = Set.of("topk", "token_budget");
+
     @BeforeEach
     void setUp() {
         // Vector-only config (hybrid disabled) — the default, pre-hybrid behavior.
-        service = new RetrievalService(chunkRepository, embeddingClient, new RagConfig(500, 50, 8, 3500));
+        meterRegistry = new SimpleMeterRegistry();
+        service = new RetrievalService(chunkRepository, embeddingClient,
+                new RagConfig(500, 50, 8, 3500), meterRegistry);
     }
 
     // ---------------------------------------------------------------------
@@ -196,13 +213,139 @@ class RetrievalServiceTest {
     }
 
     // ---------------------------------------------------------------------
+    // Observability (v1.2.M1) — assert metrics are emitted, not durations.
+    // ---------------------------------------------------------------------
+
+    @Test
+    void observability_vectorOnly_recordsTotalAndVectorTimersOnly() {
+        var hit = similarity("RESUME", 1, "hit", 0.9);
+        when(embeddingClient.embed(anyString())).thenReturn(new float[]{0.1f});
+        when(chunkRepository.searchSimilar(eq("RESUME"), eq(RESUME_ID), anyString(), eq(8)))
+                .thenReturn(List.of(hit));
+
+        service.retrieve(SourceType.RESUME, RESUME_ID, "query");
+
+        assertThat(timerCount("rag.retrieval.latency", "arm", "total", "mode", "vector")).isEqualTo(1);
+        assertThat(timerCount("rag.retrieval.latency", "arm", "vector", "mode", "vector")).isEqualTo(1);
+        // Keyword and fuse arms only exist in hybrid mode.
+        assertThat(meterRegistry.find("rag.retrieval.latency").tag("arm", "keyword").timer()).isNull();
+        assertThat(meterRegistry.find("rag.retrieval.latency").tag("arm", "fuse").timer()).isNull();
+        // Vector candidate summary recorded once; keyword summary must not exist.
+        assertThat(summaryCount("rag.retrieval.candidates", "arm", "vector")).isEqualTo(1);
+        assertThat(meterRegistry.find("rag.retrieval.candidates").tag("arm", "keyword").summary()).isNull();
+        // Hybrid-only metrics must not appear.
+        assertThat(meterRegistry.find("rag.retrieval.overlap").summary()).isNull();
+        assertThat(meterRegistry.find("rag.retrieval.fusion.winner").counter()).isNull();
+        assertThat(meterRegistry.find("rag.retrieval.fusion.contribution").summary()).isNull();
+    }
+
+    @Test
+    void observability_hybrid_recordsAllArmsAndFusionMetrics() {
+        RetrievalService hybrid = hybridService();
+        var vec1 = row(1, "vec only");
+        var both3 = row(3, "in both");
+        var kw3 = row(3, "in both");
+        var kw9 = row(9, "keyword only");
+        when(embeddingClient.embed(anyString())).thenReturn(new float[]{0.1f});
+        when(chunkRepository.searchSimilar(eq("RESUME"), eq(RESUME_ID), anyString(), eq(20)))
+                .thenReturn(List.of(vec1, both3));
+        when(chunkRepository.searchByKeyword(eq("RESUME"), eq(RESUME_ID), anyString(), eq(20)))
+                .thenReturn(List.of(kw3, kw9));
+
+        hybrid.retrieve(SourceType.RESUME, RESUME_ID, "query");
+
+        assertThat(timerCount("rag.retrieval.latency", "arm", "total", "mode", "hybrid")).isEqualTo(1);
+        assertThat(timerCount("rag.retrieval.latency", "arm", "vector", "mode", "hybrid")).isEqualTo(1);
+        assertThat(timerCount("rag.retrieval.latency", "arm", "keyword", "mode", "hybrid")).isEqualTo(1);
+        assertThat(timerCount("rag.retrieval.latency", "arm", "fuse", "mode", "hybrid")).isEqualTo(1);
+
+        assertThat(summaryCount("rag.retrieval.candidates", "arm", "vector")).isEqualTo(1);
+        assertThat(summaryCount("rag.retrieval.candidates", "arm", "keyword")).isEqualTo(1);
+
+        // Overlap = {3} → 1
+        var overlap = meterRegistry.find("rag.retrieval.overlap").summary();
+        assertThat(overlap).isNotNull();
+        assertThat(overlap.count()).isEqualTo(1);
+        assertThat(overlap.totalAmount()).isEqualTo(1.0);
+
+        // Top-1 by RRF is chunk 3 (in both arms) — winner tag = both.
+        assertThat(counterCount("rag.retrieval.fusion.winner", "arm", "both")).isEqualTo(1.0);
+        assertThat(meterRegistry.find("rag.retrieval.fusion.winner").tag("arm", "vector").counter()).isNull();
+        assertThat(meterRegistry.find("rag.retrieval.fusion.winner").tag("arm", "keyword").counter()).isNull();
+
+        // Contribution for this call: 1 vector-only + 1 keyword-only + 1 both = totals 1,1,1.
+        assertThat(summaryTotal("rag.retrieval.fusion.contribution", "arm", "vector")).isEqualTo(1.0);
+        assertThat(summaryTotal("rag.retrieval.fusion.contribution", "arm", "keyword")).isEqualTo(1.0);
+        assertThat(summaryTotal("rag.retrieval.fusion.contribution", "arm", "both")).isEqualTo(1.0);
+    }
+
+    @Test
+    void observability_hybrid_droppedTopkCounterIncrementsWhenPoolExceedsTopK() {
+        RetrievalService hybrid = hybridService();
+        // Four distinct vector candidates, keyword empty, final topK=2 → 2 dropped by topk.
+        var r1 = row(1, "r1");
+        var r2 = row(2, "r2");
+        var r3 = row(3, "r3");
+        var r4 = row(4, "r4");
+        when(embeddingClient.embed(anyString())).thenReturn(new float[]{0.1f});
+        when(chunkRepository.searchSimilar(eq("RESUME"), eq(RESUME_ID), anyString(), eq(20)))
+                .thenReturn(List.of(r1, r2, r3, r4));
+        when(chunkRepository.searchByKeyword(eq("RESUME"), eq(RESUME_ID), anyString(), eq(20)))
+                .thenReturn(List.of());
+
+        hybrid.retrieve(SourceType.RESUME, RESUME_ID, "query", 2);
+
+        assertThat(counterCount("rag.retrieval.dropped", "reason", "topk")).isEqualTo(2.0);
+    }
+
+    @Test
+    void observability_tagValues_stayWithinApprovedUniverses() {
+        // Drive the hybrid path once so every metric family emits.
+        RetrievalService hybrid = hybridService();
+        var v1 = row(1, "a");
+        var v2 = row(2, "b");
+        var v3 = row(3, "c");
+        var k2 = row(2, "b");
+        var k4 = row(4, "d");
+        when(embeddingClient.embed(anyString())).thenReturn(new float[]{0.1f});
+        when(chunkRepository.searchSimilar(eq("RESUME"), eq(RESUME_ID), anyString(), eq(20)))
+                .thenReturn(List.of(v1, v2, v3));
+        when(chunkRepository.searchByKeyword(eq("RESUME"), eq(RESUME_ID), anyString(), eq(20)))
+                .thenReturn(List.of(k2, k4));
+        hybrid.retrieve(SourceType.RESUME, RESUME_ID, "query", 2);
+        // And once through the vector path.
+        var vhit = row(1, "a");
+        when(chunkRepository.searchSimilar(eq("RESUME"), eq(RESUME_ID), anyString(), eq(8)))
+                .thenReturn(List.of(vhit));
+        service.retrieve(SourceType.RESUME, RESUME_ID, "query");
+
+        for (Meter meter : meterRegistry.getMeters()) {
+            String name = meter.getId().getName();
+            if (!name.startsWith("rag.retrieval.")) {
+                continue;
+            }
+            for (Tag tag : meter.getId().getTags()) {
+                switch (tag.getKey()) {
+                    case "arm" -> assertThat(ALLOWED_ARM_VALUES).as("arm on %s", name).contains(tag.getValue());
+                    case "mode" -> assertThat(ALLOWED_MODE_VALUES).as("mode on %s", name).contains(tag.getValue());
+                    case "reason" ->
+                            assertThat(ALLOWED_REASON_VALUES).as("reason on %s", name).contains(tag.getValue());
+                    default -> assertThat(tag.getKey())
+                            .as("unexpected tag key on %s", name)
+                            .isIn("arm", "mode", "reason");
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------
 
     /** Hybrid config: enabled, standard RRF k=60, candidate pool 20 per arm. */
     private RetrievalService hybridService() {
         return new RetrievalService(chunkRepository, embeddingClient,
-                new RagConfig(500, 50, 8, 3500, true, 60, 20));
+                new RagConfig(500, 50, 8, 3500, true, 60, 20), meterRegistry);
     }
 
     private ChunkSimilarity similarity(String sourceType, int index, String content, Double score) {
@@ -224,5 +367,25 @@ class RetrievalServiceTest {
         lenient().when(row.getChunkIndex()).thenReturn(index);
         lenient().when(row.getContent()).thenReturn(content);
         return row;
+    }
+
+    private long timerCount(String name, String... tagKvs) {
+        var timer = meterRegistry.find(name).tags(tagKvs).timer();
+        return timer == null ? 0 : timer.count();
+    }
+
+    private long summaryCount(String name, String... tagKvs) {
+        var summary = meterRegistry.find(name).tags(tagKvs).summary();
+        return summary == null ? 0 : summary.count();
+    }
+
+    private double summaryTotal(String name, String... tagKvs) {
+        var summary = meterRegistry.find(name).tags(tagKvs).summary();
+        return summary == null ? 0.0 : summary.totalAmount();
+    }
+
+    private double counterCount(String name, String... tagKvs) {
+        var counter = meterRegistry.find(name).tags(tagKvs).counter();
+        return counter == null ? 0.0 : counter.count();
     }
 }

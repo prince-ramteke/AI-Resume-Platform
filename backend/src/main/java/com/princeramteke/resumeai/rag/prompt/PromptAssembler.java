@@ -2,6 +2,8 @@ package com.princeramteke.resumeai.rag.prompt;
 
 import com.princeramteke.resumeai.rag.RagConfig;
 import com.princeramteke.resumeai.rag.retrieval.ChunkEvidence;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -32,9 +34,11 @@ public class PromptAssembler {
     private static final int CHARS_PER_TOKEN = 4;
 
     private final RagConfig ragConfig;
+    private final MeterRegistry meterRegistry;
 
-    public PromptAssembler(RagConfig ragConfig) {
+    public PromptAssembler(RagConfig ragConfig, MeterRegistry meterRegistry) {
         this.ragConfig = ragConfig;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -59,6 +63,14 @@ public class PromptAssembler {
         if (dropped > 0) {
             log.info("Prompt assembly dropped {} evidence chunk(s) to fit token budget ({} tokens)",
                     dropped, budgetTokens);
+            // v1.2.M1: shares the retrieval "dropped" counter, tagged reason=token_budget so
+            // Prometheus can distinguish topk-truncation drops (in RetrievalService) from
+            // token-budget drops (here). Fixed tag values; no user/document data.
+            Counter.builder("rag.retrieval.dropped")
+                    .description("Fused candidates dropped from the final result set, tagged by reason")
+                    .tag("reason", "token_budget")
+                    .register(meterRegistry)
+                    .increment(dropped);
         }
         return new PromptContext(jobDescriptionText, kept);
     }

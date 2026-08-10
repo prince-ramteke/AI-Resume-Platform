@@ -81,6 +81,10 @@ Set up the skeleton before any feature.
 - Refresh tokens. ✅
 - Grafana + Prometheus dashboard. ✅ — Micrometer → `/actuator/prometheus` (separate unpublished port 9091) → Prometheus → provisioned Grafana dashboard; metrics: analysis count/latency, LLM latency + token usage.
 
+## v1.2 — Retrieval quality (measurement first)
+
+- **v1.2.M1 — Retrieval evaluation harness + retrieval observability.** Testcontainers-backed harness that compares vector-only vs. hybrid retrieval on a small labeled fixture set (`backend/src/test/resources/rag-eval/cases/*.json`) using Recall@K (K = 3, 5, 8) and MRR; deterministic (`FakeEmbeddingClient`), no LLM/Ollama calls. Adds retrieval-side Micrometer metrics — `rag.retrieval.latency` (per arm + mode), `rag.retrieval.candidates` (per arm), `rag.retrieval.overlap`, `rag.retrieval.fusion.winner`, `rag.retrieval.fusion.contribution`, `rag.retrieval.dropped` (`reason={topk, token_budget}`) — with strictly bounded enum-like tag values (see `docs/SECURITY.md §2`). Report written to `target/rag-eval-report.txt` for humans; no CI quality gate. Hybrid default stays **off** (`RAG_HYBRID_ENABLED=false`) until later milestones give it evidence.
+
 ## v2 — Stretch
 - Recruiter batch mode (1 JD × N resumes, ranked).
 - Streaming results (SSE) for perceived speed.

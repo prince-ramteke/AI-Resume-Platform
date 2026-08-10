@@ -91,11 +91,11 @@ class AnalysisServiceTest {
     void setUp() {
         RagConfig ragConfig = new RagConfig(500, 50, 8, 3500);
         textChunker = new TextChunker(ragConfig);
-        promptFactory = new AnalysisPromptFactory(new PromptAssembler(ragConfig));
+        meterRegistry = new SimpleMeterRegistry();
+        promptFactory = new AnalysisPromptFactory(new PromptAssembler(ragConfig, meterRegistry));
         verdictParser = new VerdictParser();
         outputValidator = new OutputValidator();
         mapper = org.mapstruct.factory.Mappers.getMapper(AnalysisMapper.class);
-        meterRegistry = new SimpleMeterRegistry();
     }
 
     private AnalysisService service(LlmClient llm) {

@@ -56,6 +56,7 @@ management:
       percentiles-histogram:
         analysis.latency: true
         llm.latency: true
+        rag.retrieval.latency: true
 
 springdoc:
   api-docs:

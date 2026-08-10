@@ -1,0 +1,14 @@
+{
+  "caseId": "01-exact-keyword-wins",
+  "sourceType": "RESUME",
+  "chunks": [
+    {"index": 0, "content": "Wrote application services and REST controllers using generic web frameworks and standard HTTP libraries."},
+    {"index": 1, "content": "Built REST APIs in Spring Boot with PostgreSQL and JPA; used Flyway for schema migrations."},
+    {"index": 2, "content": "Enjoys hiking on weekends and volunteering with a local animal shelter."},
+    {"index": 3, "content": "Wrote a small internal CLI tool in Rust to speed up log parsing during incident triage."},
+    {"index": 4, "content": "Contributed pull requests to open-source projects across several JVM-based codebases."}
+  ],
+  "query": "Looking for a backend engineer with Spring Boot, PostgreSQL, and Flyway experience.",
+  "relevantChunkIndexes": [1],
+  "notes": "Only chunk 1 names Spring Boot / PostgreSQL / Flyway explicitly. Chunk 0 is a semantic near-match but never says Spring Boot; the keyword arm should surface chunk 1 decisively, while pure vector may be pulled toward chunk 0. Chunks 2 and 3 are distractors; chunk 4 is tangential."
+}
