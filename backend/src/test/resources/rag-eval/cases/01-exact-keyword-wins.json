@@ -10,5 +10,5 @@
   ],
   "query": "Looking for a backend engineer with Spring Boot, PostgreSQL, and Flyway experience.",
   "relevantChunkIndexes": [1],
-  "notes": "Only chunk 1 names Spring Boot / PostgreSQL / Flyway explicitly. Chunk 0 is a semantic near-match but never says Spring Boot; the keyword arm should surface chunk 1 decisively, while pure vector may be pulled toward chunk 0. Chunks 2 and 3 are distractors; chunk 4 is tangential."
+  "notes": "Only chunk 1 names Spring Boot / PostgreSQL / Flyway explicitly. Chunk 0 is a semantic near-match but never says Spring Boot; the keyword arm should surface chunk 1 decisively, while pure vector may be pulled toward chunk 0. Chunks 2 and 3 are distractors; chunk 4 is tangential. QUERY REDESIGN (v1.2.M2): original full-sentence query ('Looking for a backend engineer...') was replaced with a short keyword string so plainto_tsquery produces 'spring' & 'boot' & 'postgresql' & 'flyway' — all four of which appear together in chunk 1. The AND-conjunction correctly excludes all other chunks. Keyword-arm expected hit: chunk 1."
 }

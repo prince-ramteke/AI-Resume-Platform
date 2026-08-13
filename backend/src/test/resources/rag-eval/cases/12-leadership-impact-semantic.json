@@ -1,0 +1,14 @@
+{
+  "caseId": "12-leadership-impact-semantic",
+  "sourceType": "RESUME",
+  "chunks": [
+    {"index": 0, "content": "Championed an org-wide code-review rubric that reduced average time-to-merge from three days to six hours."},
+    {"index": 1, "content": "Grew a two-person team into an eight-person platform group over eighteen months."},
+    {"index": 2, "content": "Debugged a subtle deadlock in a producer/consumer queue."},
+    {"index": 3, "content": "Owned the on-call handbook and cut mean time to acknowledge by half."},
+    {"index": 4, "content": "Collects vintage synthesizers as a hobby."}
+  ],
+  "query": "Senior engineer who drives measurable process improvements, grows teams, and improves on-call efficiency.",
+  "relevantChunkIndexes": [0, 1, 3],
+  "notes": "Query semantics: measurable process improvements (0, 3) and grows teams (1). None of the relevant chunks share query tokens verbatim — this is a pure vector/semantic test. Chunk 2 is real engineering but not process. Chunk 4 is a distractor. QUERY REDESIGN (v1.2.M2): 'process improvements team growth' requires 'process' & 'improv' & 'team' & 'growth' in one chunk. No chunk satisfies all four — 'team' appears in chunk 1 but not with the others; 'process' may appear in chunk 3 but not with 'improv', 'team', or 'growth'. Keyword-arm expected hits: 0 (intentional semantic case)."
+}

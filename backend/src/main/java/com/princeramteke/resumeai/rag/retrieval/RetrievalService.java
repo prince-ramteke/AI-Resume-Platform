@@ -128,12 +128,23 @@ public class RetrievalService {
         int pool = ragConfig.hybridCandidatePoolSize();
         List<ChunkSimilarity> vectorRows = vectorRows(sourceType, sourceId, queryText, pool, MODE_HYBRID);
 
-        Timer.Sample kwSample = Timer.start(meterRegistry);
+        // Derive a short, bounded FTS query from the full query text. Passing the raw JD text to
+        // plainto_tsquery generates a 15–40 term AND-conjunction that no single chunk satisfies,
+        // causing 0 keyword candidates. KeywordQueryBuilder extracts up to N distinctive technical
+        // tokens; if none qualify (semantic/prose JD), we skip the keyword arm entirely.
+        String keywordQuery = KeywordQueryBuilder.build(queryText, ragConfig.hybridKeywordTermLimit());
         List<ChunkSimilarity> keywordRows;
-        try {
-            keywordRows = chunkRepository.searchByKeyword(sourceType.name(), sourceId, queryText, pool);
-        } finally {
-            kwSample.stop(latencyTimer(ARM_KEYWORD, MODE_HYBRID));
+        if (keywordQuery.isBlank()) {
+            log.debug("Keyword arm skipped: no distinctive technical terms extracted from query");
+            keywordRows = List.of();
+        } else {
+            Timer.Sample kwSample = Timer.start(meterRegistry);
+            try {
+                keywordRows = chunkRepository.searchByKeyword(
+                        sourceType.name(), sourceId, keywordQuery, pool);
+            } finally {
+                kwSample.stop(latencyTimer(ARM_KEYWORD, MODE_HYBRID));
+            }
         }
         candidatesSummary(ARM_KEYWORD).record(keywordRows.size());
 

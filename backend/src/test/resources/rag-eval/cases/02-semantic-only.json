@@ -8,7 +8,7 @@
     {"index": 3, "content": "Ran quarterly retrospectives that surfaced actionable process improvements across three product squads."},
     {"index": 4, "content": "Fixed a memory leak in the ingestion pipeline caused by an unbounded producer queue."}
   ],
-  "query": "We need a technical lead who develops other engineers and shepherds cross-team decisions.",
+  "query": "We need a technical lead who drives cross-team architectural decisions and mentors engineers.",
   "relevantChunkIndexes": [0, 1, 3],
-  "notes": "The query never says 'mentor', 'review', or 'retro' — success depends on semantic matching. Vector arm should dominate. Chunk 2 is an obvious distractor; chunk 4 is real technical work but unrelated to the leadership signal the query is asking for."
+  "notes": "Query semantics: developing engineers (0), cross-team decisions (1), process improvements (3). No single chunk contains all query terms simultaneously ('technical', 'lead', 'engineers', 'cross', 'decisions' are spread across different chunks or absent), so the keyword arm correctly returns 0 and vector dominates. Chunk 2 is an obvious distractor; chunk 4 is real technical work but unrelated to the leadership signal. QUERY REDESIGN (v1.2.M2): shortened from a full sentence but kept deliberately semantic — no chunk satisfies the AND-conjunction of all tokens. Keyword-arm expected hits: 0 (intentional)."
 }

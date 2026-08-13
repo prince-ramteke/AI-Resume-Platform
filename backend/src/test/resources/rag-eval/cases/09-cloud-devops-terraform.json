@@ -1,0 +1,14 @@
+{
+  "caseId": "09-cloud-devops-terraform",
+  "sourceType": "RESUME",
+  "chunks": [
+    {"index": 0, "content": "Owned AWS account structure (Organizations + SCPs) and wrote all infra as Terraform modules with a shared registry."},
+    {"index": 1, "content": "Built GitHub Actions pipelines for build/test/deploy with matrix strategies for Java and Node."},
+    {"index": 2, "content": "Ran a small on-prem OpenStack lab for cost benchmarking experiments."},
+    {"index": 3, "content": "Attended a Rust language user group monthly for two years."},
+    {"index": 4, "content": "Wrote CloudFormation templates before the team migrated to Terraform."}
+  ],
+  "query": "AWS infrastructure engineer who writes Terraform modules and manages cloud account structures.",
+  "relevantChunkIndexes": [0, 1],
+  "notes": "Chunks 0 and 1 directly match AWS+Terraform and GitHub Actions. Chunk 4 mentions Terraform but only historically (post-migration) — adjacent, not the ask. Chunk 2 (OpenStack) and chunk 3 (Rust) are distractors. Keyword arm should nail 0; naive vector may pull 4 up on 'Terraform' proximity. QUERY REDESIGN (v1.2.M2): 'AWS Terraform modules' targets chunk 0 — plainto_tsquery 'aws' & 'terraform' & 'modul' all appear in chunk 0. Chunk 4 has 'terraform' but not 'aws' or 'modules', so the AND-conjunction filters it. Chunk 1 (GitHub Actions) has none of the three tokens and must be found by the vector arm. Keyword-arm expected hit: chunk 0 only."
+}

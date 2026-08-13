@@ -1,0 +1,14 @@
+{
+  "caseId": "13-frontend-react-typescript",
+  "sourceType": "RESUME",
+  "chunks": [
+    {"index": 0, "content": "Built a design-system component library in React and TypeScript, published to the internal npm registry."},
+    {"index": 1, "content": "Migrated a Redux codebase to Zustand and TanStack Query, shrinking the client bundle by 22 percent."},
+    {"index": 2, "content": "Wrote a small Rust CLI for image compression at the design agency I used to work at."},
+    {"index": 3, "content": "Configured Playwright end-to-end tests running in GitHub Actions across three browsers."},
+    {"index": 4, "content": "Owns a small permaculture homestead on weekends."}
+  ],
+  "query": "Frontend engineer to build a React component library in TypeScript for our design system.",
+  "relevantChunkIndexes": [0, 1, 3],
+  "notes": "Chunks 0 (React + TS), 1 (state management: Redux to Zustand/TanStack Query), 3 (E2E: Playwright) each match a distinct part of the query intent. Chunk 2 is unrelated backend. Chunk 4 is a distractor. QUERY REDESIGN (v1.2.M2): 'React TypeScript component library' targets chunk 0 — plainto_tsquery 'react' & 'typescript' & 'compon' & 'librari' all appear in chunk 0. Chunks 1 and 3 lack these exact tokens and must be found by the vector arm (Zustand/state management and Playwright/E2E are semantic matches, not literal). Keyword-arm expected hit: chunk 0 only."
+}

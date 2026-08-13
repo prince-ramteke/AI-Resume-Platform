@@ -9,7 +9,7 @@
     {"index": 4, "content": "Ported a legacy session-cookie auth system to stateless bearer tokens across three services."},
     {"index": 5, "content": "Wrote a small internal tool for parsing X.509 certificate chains during a security audit."}
   ],
-  "query": "Backend engineer to harden our OAuth and JWT stack: key rotation, refresh-token security, and stateless auth patterns.",
+  "query": "Backend engineer to harden our JWT infrastructure with signing key rotation and short-lived tokens.",
   "relevantChunkIndexes": [0, 1, 3, 4],
-  "notes": "Four relevant chunks (0 OAuth, 1 JWT rotation, 3 refresh-token security, 4 stateless auth). Chunk 5 is adjacent security work but not the ask. Chunk 2 is a distractor. Recall@K at K=3 must necessarily be < 1.0; at K=5 or K=8 it can reach 1.0 if all four are retrieved."
+  "notes": "Four relevant chunks (0 OAuth, 1 JWT rotation, 3 refresh-token security, 4 stateless auth). Chunk 5 is adjacent security work but not the ask. Chunk 2 is a distractor. Recall@K at K=3 must necessarily be < 1.0; at K=5 or K=8 it can reach 1.0 if all four are retrieved. QUERY REDESIGN (v1.2.M2): 'JWT rotation signing keys' targets chunk 1 specifically — plainto_tsquery 'jwt' & 'rotat' & 'sign' & 'key' all appear in chunk 1. Other relevant chunks (OAuth, refresh-token, stateless) lack these exact tokens, so they can only be found by the vector arm — an intentional multi-relevant case where keyword arm finds one hit and vector arm surfaces the rest. Keyword-arm expected hit: chunk 1 only."
 }

@@ -1,0 +1,14 @@
+{
+  "caseId": "10-database-internals-semantic",
+  "sourceType": "RESUME",
+  "chunks": [
+    {"index": 0, "content": "Debugged a hot partition problem by re-choosing the shard key across a two-week window with zero downtime."},
+    {"index": 1, "content": "Rewrote a slow report query by pushing filters below a hash join and adding a covering index."},
+    {"index": 2, "content": "Investigated a subtle write-skew anomaly under read-committed isolation; moved the critical section to serializable."},
+    {"index": 3, "content": "Enjoys competitive Scrabble at a regional level."},
+    {"index": 4, "content": "Set up cross-region asynchronous replication for a customer-facing catalog service."}
+  ],
+  "query": "Senior database engineer comfortable with advanced sharding, isolation levels, and query planning.",
+  "relevantChunkIndexes": [0, 1, 2],
+  "notes": "Chunks discuss the requested topics using adjacent vocabulary rather than the exact query terms: 'shard key' (0), 'hash join / covering index' (1), 'read-committed / serializable' (2). Vector arm should shine. Chunk 4 is real DB work but not the ask; chunk 3 is a distractor. QUERY REDESIGN (v1.2.M2): 'database sharding isolation levels query planning' is kept semantically rich. No single chunk contains all of {'database', 'shard', 'isol', 'level', 'query', 'plan'} simultaneously — chunk 0 has 'shard', chunk 1 has 'query', chunk 2 has 'isol', but the AND-conjunction requires all. Keyword-arm expected hits: 0 (intentional semantic case)."
+}

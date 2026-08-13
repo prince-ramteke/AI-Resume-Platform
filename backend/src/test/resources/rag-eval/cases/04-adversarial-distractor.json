@@ -8,7 +8,7 @@
     {"index": 3, "content": "Recreational rock climbing at V4 grade."},
     {"index": 4, "content": "Reviewed an unrelated team's Terraform modules for AWS EKS clusters and flagged three IAM privilege-escalation risks."}
   ],
-  "query": "Kubernetes engineer with hands-on production experience deploying real workloads on GKE or EKS.",
+  "query": "Platform engineer to migrate legacy services to Kubernetes on GKE with Helm chart deployments.",
   "relevantChunkIndexes": [2],
-  "notes": "Chunk 0 contains the keyword 'Kubernetes' but the person did NOT do Kubernetes work — pure keyword arm can be misled. Only chunk 2 reflects real hands-on Kubernetes production work. Chunk 4 is adjacent (EKS but read-only review). Chunk 1 is anti-signal. Chunk 3 is a distractor. Tests whether hybrid RRF surfaces chunk 2 despite the tempting keyword hits."
+  "notes": "Only chunk 2 reflects real hands-on Kubernetes production work on GKE with Helm. Chunk 0 contains the keyword 'Kubernetes' but the person did NOT do Kubernetes work. Chunk 4 is adjacent (EKS but read-only review). Chunk 1 is anti-signal. Chunk 3 is a distractor. QUERY REDESIGN (v1.2.M2): 'Kubernetes GKE Helm' produces AND-tsquery 'kubernete' & 'gke' & 'helm'. Chunk 0 has 'kubernete' but NOT 'gke' or 'helm', so the AND-conjunction correctly filters the adversarial chunk. Only chunk 2 has all three terms. This demonstrates AND semantics as a natural adversarial filter — a keyword-only hit on 'Kubernetes' is not enough. Keyword-arm expected hit: chunk 2 only."
 }

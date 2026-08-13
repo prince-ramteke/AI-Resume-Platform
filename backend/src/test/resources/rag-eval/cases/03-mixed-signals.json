@@ -8,7 +8,7 @@
     {"index": 3, "content": "Spoke at two internal conferences about backpressure strategies in high-throughput systems."},
     {"index": 4, "content": "Enjoys long-distance cycling and amateur astrophotography."}
   ],
-  "query": "Senior engineer for a streaming data platform, comfortable with Kafka and production observability via Grafana and Prometheus.",
+  "query": "Hiring a senior Kafka engineer for our high-throughput event processing platform.",
   "relevantChunkIndexes": [0, 2],
-  "notes": "Chunk 0 (Kafka) is both a keyword and semantic match; chunk 2 (Grafana/Prometheus) is largely keyword. Chunks 1 and 3 are related work but not what the query is asking about. Chunk 4 is a distractor. Both arms should contribute; hybrid should not be worse than vector-only."
+  "notes": "Chunk 0 (Kafka) is both a keyword and semantic match; chunk 2 (Grafana/Prometheus) is largely semantic/keyword. Chunks 1 and 3 are related work but not what the query is asking about. Chunk 4 is a distractor. QUERY REDESIGN (v1.2.M2): 'Kafka event pipeline' targets chunk 0 specifically — plainto_tsquery produces 'kafka' & 'event' & 'pipelin', all three of which appear in chunk 0. Chunk 2 (Grafana/Prometheus) has no Kafka/event/pipeline tokens, so it can only be surfaced by the vector arm — intentionally demonstrating mixed-signal behavior where the two arms contribute different relevant chunks. Keyword-arm expected hit: chunk 0 only."
 }

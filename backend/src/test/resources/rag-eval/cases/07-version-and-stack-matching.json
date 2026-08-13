@@ -1,0 +1,14 @@
+{
+  "caseId": "07-version-and-stack-matching",
+  "sourceType": "RESUME",
+  "chunks": [
+    {"index": 0, "content": "Backend services in Java 21 with virtual threads (Project Loom) enabled for the HTTP layer."},
+    {"index": 1, "content": "Maintains a legacy Java 8 Spring MVC monolith and periodically bumps only security-patch versions."},
+    {"index": 2, "content": "Deployed a Spring Boot 3.2 application onto Kubernetes via a Helm chart."},
+    {"index": 3, "content": "Hobbyist woodworking and furniture restoration."},
+    {"index": 4, "content": "Wrote data-processing scripts in Python 3.11 and packaged them via Poetry."}
+  ],
+  "query": "Backend engineer for a Java 21 service with Project Loom virtual threads and high-throughput HTTP handling.",
+  "relevantChunkIndexes": [0, 2],
+  "notes": "Chunk 0 (Java 21) and chunk 2 (Spring Boot 3) match exactly. Chunk 1 is anti-signal (Java 8) — a naive keyword arm may pull it in on 'Java'. Chunk 4 (Python) is off-target. Chunk 3 is a distractor. Version-specific matching favors the keyword arm; the vector arm may over-weight lexical similarity between 'Java 21' and 'Java 8'. QUERY REDESIGN (v1.2.M2): 'Java 21 virtual threads' targets chunk 0 — plainto_tsquery produces 'java' & '21' & 'virtual' & 'thread', all four of which appear in chunk 0. Chunk 1 ('Java 8') has 'java' but not '21', 'virtual', or 'thread', so the AND-conjunction correctly excludes the anti-signal. Chunk 2 (Spring Boot 3.2) has neither 'java' nor '21'. Keyword-arm expected hit: chunk 0 only. Vector arm must surface chunk 2."
+}

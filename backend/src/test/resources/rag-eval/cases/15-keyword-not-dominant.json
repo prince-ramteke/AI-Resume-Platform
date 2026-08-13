@@ -1,0 +1,14 @@
+{
+  "caseId": "15-keyword-not-dominant",
+  "sourceType": "RESUME",
+  "chunks": [
+    {"index": 0, "content": "Wrote a Medium article titled 'Why we did NOT choose Redis for our cache layer' explaining the trade-offs."},
+    {"index": 1, "content": "Designed and operated a Memcached tier with consistent-hashing across twelve nodes."},
+    {"index": 2, "content": "Implemented an in-process Caffeine cache with size-based eviction and TTL for hot-path lookups."},
+    {"index": 3, "content": "Ran a small woodworking shop as a side business for three years."},
+    {"index": 4, "content": "Redis Streams was evaluated for our queue use case but rejected in favor of Kafka."}
+  ],
+  "query": "Engineer with hands-on production caching experience using in-process and distributed cache strategies.",
+  "relevantChunkIndexes": [1, 2],
+  "notes": "Chunks 0 and 4 both contain the token 'Redis' but neither represents the person USING Redis — chunk 0 is 'we did NOT choose', chunk 4 is 'rejected'. The real hands-on cache work is Memcached (1) and Caffeine (2). Query is vocabulary-neutral. A naive keyword arm using 'Redis' would surface 0 and 4 adversarially. QUERY REDESIGN (v1.2.M2): 'production caching experience' requires 'product' & 'cach' & 'experi' in one chunk. No chunk satisfies all three — chunk 2 has 'cach' (from 'Caffeine cache') but the 'cache' token in chunk 2 is stored as 'cach' while chunk 1's 'Memcached' stores as 'memcach' (different lexeme). Neither chunk has 'product' or 'experi'. The adversarial chunks (0, 4) also don't satisfy the AND. Keyword-arm expected hits: 0. This is an intentional adversarial case — keyword returns nothing, vector must distinguish real caching work from Redis rejection mentions. Keyword-arm expected hits: 0 (intentional)."
+}

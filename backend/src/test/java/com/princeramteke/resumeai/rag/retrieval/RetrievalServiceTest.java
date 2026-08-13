@@ -20,6 +20,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -141,13 +142,14 @@ class RetrievalServiceTest {
         var both5 = row(5, "in both arms");
         var kw5 = row(5, "in both arms");
         var kw9 = row(9, "keyword only");
-        when(embeddingClient.embed("job text")).thenReturn(new float[]{0.1f});
+        when(embeddingClient.embed(anyString())).thenReturn(new float[]{0.1f});
         when(chunkRepository.searchSimilar(eq("RESUME"), eq(RESUME_ID), anyString(), eq(20)))
                 .thenReturn(List.of(vec2, both5));
-        when(chunkRepository.searchByKeyword(eq("RESUME"), eq(RESUME_ID), eq("job text"), eq(20)))
+        // "Java Spring Boot" → KeywordQueryBuilder produces "Java Spring Boot" (3 uppercase tokens)
+        when(chunkRepository.searchByKeyword(eq("RESUME"), eq(RESUME_ID), eq("Java Spring Boot"), eq(20)))
                 .thenReturn(List.of(kw5, kw9));
 
-        List<ChunkEvidence> evidence = hybrid.retrieve(SourceType.RESUME, RESUME_ID, "job text");
+        List<ChunkEvidence> evidence = hybrid.retrieve(SourceType.RESUME, RESUME_ID, "Java Spring Boot");
 
         // RRF(k=60): chunk5 = 1/62 + 1/61 (both arms) > chunk2 = 1/61 (vector r1) > chunk9 = 1/62 (keyword r2).
         assertThat(evidence).extracting(ChunkEvidence::ref)
@@ -172,7 +174,8 @@ class RetrievalServiceTest {
         when(chunkRepository.searchByKeyword(eq("RESUME"), eq(RESUME_ID), anyString(), eq(20)))
                 .thenReturn(List.of(kw7));
 
-        List<ChunkEvidence> evidence = hybrid.retrieve(SourceType.RESUME, RESUME_ID, "query");
+        // Technical query → builder produces "Java Spring Boot" → keyword arm fires (anyString() matches)
+        List<ChunkEvidence> evidence = hybrid.retrieve(SourceType.RESUME, RESUME_ID, "Java Spring Boot");
 
         assertThat(evidence).extracting(ChunkEvidence::ref)
                 .containsExactlyInAnyOrder("RESUME#1", "RESUME#7");
@@ -187,10 +190,11 @@ class RetrievalServiceTest {
         when(chunkRepository.searchByKeyword(anyString(), eq(RESUME_ID), anyString(), anyInt()))
                 .thenReturn(List.of());
 
-        hybrid.retrieve(SourceType.RESUME, RESUME_ID, "job text");
+        // "Java Spring Boot" → builder extracts "Java Spring Boot" → both arms scoped to same source
+        hybrid.retrieve(SourceType.RESUME, RESUME_ID, "Java Spring Boot");
 
         verify(chunkRepository).searchSimilar(eq("RESUME"), eq(RESUME_ID), anyString(), eq(20));
-        verify(chunkRepository).searchByKeyword(eq("RESUME"), eq(RESUME_ID), eq("job text"), eq(20));
+        verify(chunkRepository).searchByKeyword(eq("RESUME"), eq(RESUME_ID), eq("Java Spring Boot"), eq(20));
     }
 
     @Test
@@ -206,10 +210,58 @@ class RetrievalServiceTest {
         when(chunkRepository.searchByKeyword(eq("RESUME"), eq(RESUME_ID), anyString(), eq(20)))
                 .thenReturn(List.of());
 
-        List<ChunkEvidence> evidence = hybrid.retrieve(SourceType.RESUME, RESUME_ID, "query", 2);
+        List<ChunkEvidence> evidence = hybrid.retrieve(SourceType.RESUME, RESUME_ID, "Java Spring Boot", 2);
 
         // Truncated to the requested breadth, keeping the two highest RRF scores (ranks 1 and 2).
         assertThat(evidence).extracting(ChunkEvidence::ref).containsExactly("RESUME#1", "RESUME#2");
+    }
+
+    @Test
+    void retrieve_hybrid_semanticProseQuery_keywordArmSkipped() {
+        // "looking for a great developer to work with" → all stop words / lowercase → builder returns ""
+        // → keyword arm must NOT fire (no DB round-trip, no unused stub exception)
+        RetrievalService hybrid = hybridService();
+        when(embeddingClient.embed(anyString())).thenReturn(new float[]{0.1f});
+        when(chunkRepository.searchSimilar(anyString(), eq(RESUME_ID), anyString(), anyInt()))
+                .thenReturn(List.of());
+
+        hybrid.retrieve(SourceType.RESUME, RESUME_ID, "looking for a great developer to work with");
+
+        verify(chunkRepository, never()).searchByKeyword(anyString(), anyLong(), anyString(), anyInt());
+    }
+
+    @Test
+    void retrieve_hybrid_lowercaseTechnicalVocab_keywordArmCalled() {
+        // TECH_VOCAB covers common lowercase tech names; builder must keep them even without uppercase
+        RetrievalService hybrid = hybridService();
+        when(embeddingClient.embed(anyString())).thenReturn(new float[]{0.1f});
+        when(chunkRepository.searchSimilar(anyString(), eq(RESUME_ID), anyString(), anyInt()))
+                .thenReturn(List.of());
+        when(chunkRepository.searchByKeyword(eq("RESUME"), eq(RESUME_ID), eq("python kubernetes docker"), eq(20)))
+                .thenReturn(List.of());
+
+        hybrid.retrieve(SourceType.RESUME, RESUME_ID, "python kubernetes docker");
+
+        verify(chunkRepository).searchByKeyword(eq("RESUME"), eq(RESUME_ID), eq("python kubernetes docker"), eq(20));
+    }
+
+    @Test
+    void retrieve_hybrid_keywordQueryBoundedToTermLimit() {
+        // hybridService() sets hybridKeywordTermLimit=5 (via 7-arg constructor default)
+        // 8 uppercase tokens but only first 5 are passed to the keyword arm
+        RetrievalService hybrid = hybridService();
+        when(embeddingClient.embed(anyString())).thenReturn(new float[]{0.1f});
+        when(chunkRepository.searchSimilar(anyString(), eq(RESUME_ID), anyString(), anyInt()))
+                .thenReturn(List.of());
+        when(chunkRepository.searchByKeyword(eq("RESUME"), eq(RESUME_ID),
+                eq("Java Spring Boot PostgreSQL Docker"), eq(20)))
+                .thenReturn(List.of());
+
+        hybrid.retrieve(SourceType.RESUME, RESUME_ID,
+                "Java Spring Boot PostgreSQL Docker Redis Kafka Kubernetes");
+
+        verify(chunkRepository).searchByKeyword(eq("RESUME"), eq(RESUME_ID),
+                eq("Java Spring Boot PostgreSQL Docker"), eq(20));
     }
 
     // ---------------------------------------------------------------------
@@ -252,7 +304,8 @@ class RetrievalServiceTest {
         when(chunkRepository.searchByKeyword(eq("RESUME"), eq(RESUME_ID), anyString(), eq(20)))
                 .thenReturn(List.of(kw3, kw9));
 
-        hybrid.retrieve(SourceType.RESUME, RESUME_ID, "query");
+        // "Java Spring Boot" → builder produces "Java Spring Boot" → keyword arm fires
+        hybrid.retrieve(SourceType.RESUME, RESUME_ID, "Java Spring Boot");
 
         assertThat(timerCount("rag.retrieval.latency", "arm", "total", "mode", "hybrid")).isEqualTo(1);
         assertThat(timerCount("rag.retrieval.latency", "arm", "vector", "mode", "hybrid")).isEqualTo(1);
@@ -293,7 +346,7 @@ class RetrievalServiceTest {
         when(chunkRepository.searchByKeyword(eq("RESUME"), eq(RESUME_ID), anyString(), eq(20)))
                 .thenReturn(List.of());
 
-        hybrid.retrieve(SourceType.RESUME, RESUME_ID, "query", 2);
+        hybrid.retrieve(SourceType.RESUME, RESUME_ID, "Java Spring Boot", 2);
 
         assertThat(counterCount("rag.retrieval.dropped", "reason", "topk")).isEqualTo(2.0);
     }
@@ -312,7 +365,8 @@ class RetrievalServiceTest {
                 .thenReturn(List.of(v1, v2, v3));
         when(chunkRepository.searchByKeyword(eq("RESUME"), eq(RESUME_ID), anyString(), eq(20)))
                 .thenReturn(List.of(k2, k4));
-        hybrid.retrieve(SourceType.RESUME, RESUME_ID, "query", 2);
+        // "Java Spring Boot" → builder extracts 3 tokens → keyword arm fires (uses anyString() stub)
+        hybrid.retrieve(SourceType.RESUME, RESUME_ID, "Java Spring Boot", 2);
         // And once through the vector path.
         var vhit = row(1, "a");
         when(chunkRepository.searchSimilar(eq("RESUME"), eq(RESUME_ID), anyString(), eq(8)))

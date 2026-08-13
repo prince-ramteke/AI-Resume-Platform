@@ -83,12 +83,14 @@ app:
     chunk-overlap: ${RAG_CHUNK_OVERLAP:50}
     retrieval-top-k: ${RAG_RETRIEVAL_TOP_K:8}
     max-prompt-tokens: ${LLM_MAX_PROMPT_TOKENS:3500}
-    # Hybrid retrieval (v1.1): blend vector similarity with PostgreSQL full-text keyword
-    # search and fuse via Reciprocal Rank Fusion. Defaults OFF so behavior stays vector-only
-    # until enabled. Enabling requires the V6 full-text index to be applied.
-    hybrid-enabled: ${RAG_HYBRID_ENABLED:false}
+    # Hybrid retrieval (v1.1/v1.2): blend vector similarity with PostgreSQL full-text keyword
+    # search and fuse via Reciprocal Rank Fusion. Enabled by default (v1.2.M2 decision:
+    # Recall@3 +13.33pp, MRR +23.89pp, zero regressions vs 15-case eval). Requires the V6
+    # full-text index (shipped in v1.1). Disable with RAG_HYBRID_ENABLED=false if needed.
+    hybrid-enabled: ${RAG_HYBRID_ENABLED:true}
     hybrid-rrf-k: ${RAG_HYBRID_RRF_K:60}                         # RRF damping constant (standard default 60)
     hybrid-candidate-pool-size: ${RAG_HYBRID_CANDIDATE_POOL_SIZE:20}  # candidates pulled per arm before fusion
+    hybrid-keyword-term-limit: ${RAG_HYBRID_KEYWORD_TERM_LIMIT:5}     # max technical tokens passed to plainto_tsquery (v1.2.M2)
   embedding:
     provider: ${EMBEDDING_PROVIDER:ollama}
     dimensions: ${EMBEDDING_DIMENSIONS:768}

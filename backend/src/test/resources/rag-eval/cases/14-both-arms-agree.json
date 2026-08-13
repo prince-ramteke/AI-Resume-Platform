@@ -1,0 +1,14 @@
+{
+  "caseId": "14-both-arms-agree",
+  "sourceType": "RESUME",
+  "chunks": [
+    {"index": 0, "content": "Led migration of a monolithic Python Django API to a microservices architecture using FastAPI and gRPC."},
+    {"index": 1, "content": "Introduced structured logging with correlation IDs and integrated with OpenTelemetry tracing."},
+    {"index": 2, "content": "Enjoys marathon running and completed three ultra-marathons last year."},
+    {"index": 3, "content": "Set up Prometheus and Grafana dashboards for latency and error-rate SLOs."},
+    {"index": 4, "content": "Wrote comprehensive integration tests using pytest with 90 percent code coverage."}
+  ],
+  "query": "Backend Python engineer to build FastAPI microservices with gRPC inter-service communication.",
+  "relevantChunkIndexes": [0, 1, 3],
+  "notes": "Every relevant chunk contains clear technical signals. Chunks 0 (FastAPI/gRPC/microservices), 1 (OpenTelemetry structured logging), 3 (Prometheus/Grafana) each match distinct parts of the original intent. Fusion should be correct for the parts keyword can reach. QUERY REDESIGN (v1.2.M2): 'FastAPI gRPC microservices' targets chunk 0 — plainto_tsquery 'fastapi' & 'grpc' & 'microservic' all appear in chunk 0. Chunks 1 (OpenTelemetry) and 3 (Prometheus/Grafana) lack these tokens and must be surfaced by the vector arm. This demonstrates partial both-arms agreement: keyword finds chunk 0 confidently; vector finds 0, 1, and 3; RRF promotes chunk 0 to the top. Keyword-arm expected hit: chunk 0 only."
+}

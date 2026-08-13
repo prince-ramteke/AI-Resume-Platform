@@ -25,6 +25,10 @@
         <tika.version>2.9.2</tika.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <bucket4j.version>8.10.1</bucket4j.version>
+        <!-- Pinned so Testcontainers/docker-java negotiates an API version Docker Desktop 4.7x
+             accepts (its TCP endpoint stubs /v1.32/* to empty bodies; BOM's 1.20.4 hardcodes
+             v1.32 and fails). Test-scope only; production runtime unaffected. -->
+        <testcontainers.version>1.21.3</testcontainers.version>
     </properties>
 
     <dependencies>

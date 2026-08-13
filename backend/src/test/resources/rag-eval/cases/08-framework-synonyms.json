@@ -1,0 +1,14 @@
+{
+  "caseId": "08-framework-synonyms",
+  "sourceType": "RESUME",
+  "chunks": [
+    {"index": 0, "content": "Extensive experience with PostgreSQL replication, connection pooling, and read replicas."},
+    {"index": 1, "content": "Wrote data ingestion in Postgres, using logical replication slots for CDC."},
+    {"index": 2, "content": "Managed a MongoDB cluster for a document-heavy analytics workload."},
+    {"index": 3, "content": "Wrote React components in JS with TypeScript later added incrementally."},
+    {"index": 4, "content": "Front-end work in JavaScript / TS with Vite, Redux Toolkit, and React Testing Library."}
+  ],
+  "query": "Backend engineer with deep PostgreSQL replication and connection pooling expertise for a high-traffic read workload.",
+  "relevantChunkIndexes": [0, 1],
+  "notes": "Chunks 0 (PostgreSQL) and 1 (Postgres) refer to the same tool but with different surface forms. A pure keyword arm may miss chunk 1 unless the English FTS analyzer stems 'Postgres' and 'PostgreSQL' identically (it does not — they produce different lexemes). Vector should catch both. Chunks 2, 3, 4 are off-topic. QUERY REDESIGN (v1.2.M2): 'PostgreSQL replication connection pooling' targets chunk 0 — plainto_tsquery 'postgresql' & 'replic' & 'connect' & 'pool' all appear in chunk 0. Chunk 1 uses 'Postgres' (not 'PostgreSQL'), so to_tsvector produces 'postgres' (not 'postgresql') and the AND-conjunction correctly excludes it. This is an intentional demonstration that keyword arm misses the synonym variant — the vector arm must recover chunk 1. Keyword-arm expected hit: chunk 0 only."
+}

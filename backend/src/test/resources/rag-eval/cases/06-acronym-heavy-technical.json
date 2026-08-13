@@ -1,0 +1,14 @@
+{
+  "caseId": "06-acronym-heavy-technical",
+  "sourceType": "RESUME",
+  "chunks": [
+    {"index": 0, "content": "Automated infrastructure with Terraform (IaC) and rolled out changes via GitHub Actions CI/CD pipelines."},
+    {"index": 1, "content": "Operated a K8s cluster of 40 nodes and set up mTLS between services using an internal PKI."},
+    {"index": 2, "content": "Wrote gRPC APIs for internal service-to-service calls with Protocol Buffers schemas."},
+    {"index": 3, "content": "Ran a knitting circle at the local library on weekends."},
+    {"index": 4, "content": "Implemented OAuth 2.1 + PKCE for a customer-facing SPA and hardened SAML SSO for the admin console."}
+  ],
+  "query": "Platform engineer with K8s cluster operations, mTLS enforcement, and PKI certificate management.",
+  "relevantChunkIndexes": [0, 1, 4],
+  "notes": "Chunks 0, 1, 4 each match at least two acronyms in the original query intent (Terraform+CI/CD, K8s, OAuth). Chunk 2 is technical adjacent (gRPC) but not what the query asks. Chunk 3 is a distractor. Acronyms tend to hit the keyword arm cleanly; vector arm may struggle with abbreviations. QUERY REDESIGN (v1.2.M2): 'K8s mTLS PKI cluster' targets chunk 1 specifically — plainto_tsquery produces 'k8s' & 'mtls' & 'pki' & 'cluster', all four of which appear in chunk 1. Chunks 0 and 4 lack these exact tokens, so they can only be surfaced by the vector arm. This demonstrates that acronym-dense queries can hit keyword precisely for one chunk while vector handles the rest. Keyword-arm expected hit: chunk 1 only."
+}
