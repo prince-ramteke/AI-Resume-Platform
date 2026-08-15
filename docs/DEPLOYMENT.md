@@ -155,9 +155,74 @@ Branch protection on `main`: require the `backend` and `frontend` checks to pass
 
 ---
 
-## 6. Optional cloud (stretch)
+## 6. Cloud / Portfolio Demo Deployment
 
-If you later want a public demo URL: deploy the frontend to a static host and the backend + Postgres to Render/Railway free tier. Ollama won't run on free tiers — for cloud, set `LLM_PROVIDER=openai`. Keep this out of v1; note it in `ROADMAP.md`.
+Public demo path: static-host frontend + PaaS backend + managed PostgreSQL with pgvector + OpenAI for LLM and embeddings. Ollama is not used; `docker-compose.yml` remains local-dev only.
+
+### 6.1 Prerequisites
+
+- Managed PostgreSQL instance with the `pgvector` extension enabled (`CREATE EXTENSION IF NOT EXISTS vector`). Confirm pgvector ≥ 0.5 (HNSW support required). Providers: Neon, Supabase, Render Postgres, Railway Postgres.
+- OpenAI API key with access to `gpt-4o-mini` and `text-embedding-3-small`.
+- PaaS account for the backend (Render Web Service, Railway, Fly.io).
+- Static host for the frontend (Vercel, Netlify, Cloudflare Pages).
+
+### 6.2 Schema — V7 migration (embedding dimension)
+
+The production DB column is `vector(1536)` to match `text-embedding-3-small`. Migration `V7__embedding_dimension_1536.sql` handles this automatically on first backend startup via Flyway. The production DB must be **fresh** (no pre-existing chunks embedded at 768 dims).
+
+### 6.3 Required production environment variables
+
+Set these in the PaaS platform's secret/env UI. Never commit them.
+
+| Variable | Production value |
+|---|---|
+| `DB_URL` | `jdbc:postgresql://<host>:5432/resumeai` |
+| `DB_USER` | platform-assigned |
+| `DB_PASSWORD` | platform-assigned (strong, not `change_me`) |
+| `JWT_SECRET` | ≥256-bit random — `openssl rand -hex 32` |
+| `JWT_EXPIRY_MINUTES` | `60` |
+| `REFRESH_TOKEN_EXPIRY_DAYS` | `7` |
+| `LLM_PROVIDER` | `openai` |
+| `LLM_FALLBACK_ENABLED` | `false` |
+| `EMBEDDING_PROVIDER` | `openai` |
+| `EMBEDDING_DIMENSIONS` | `1536` |
+| `OPENAI_API_KEY` | real key |
+| `OPENAI_CHAT_MODEL` | `gpt-4o-mini` |
+| `OPENAI_EMBED_MODEL` | `text-embedding-3-small` |
+| `OPENAI_BASE_URL` | `https://api.openai.com` |
+| `FRONTEND_ORIGIN` | `https://<your-frontend-domain>` |
+| `STORAGE_PATH` | `/app/uploads` (or platform persistent-disk path) |
+| `ADMIN_EMAIL` | your admin email |
+| `ADMIN_PASSWORD` | pre-hashed BCrypt — `htpasswd -bnBC 10 "" yourpassword \| tr -d ':'` |
+| `SPRING_PROFILES_ACTIVE` | `docker` |
+
+`GRAFANA_ADMIN_PASSWORD`, `OLLAMA_*`, and Prometheus/Grafana vars are not needed — the observability stack is not deployed in this path.
+
+### 6.4 Frontend — build-time `VITE_API_BASE_URL`
+
+`VITE_API_BASE_URL` is baked into the static bundle at build time by Vite. Pass it as a Docker build argument or as a build-environment variable on the static host:
+
+```bash
+# Docker build (manual)
+docker build \
+  --build-arg VITE_API_BASE_URL=https://<backend-domain>/api \
+  -t resume-ai-frontend ./frontend
+
+# Vercel / Netlify / Cloudflare Pages
+# Set VITE_API_BASE_URL as an environment variable in the project settings.
+# The static host runs npm run build with that variable present.
+```
+
+`FRONTEND_ORIGIN` on the backend must match the static host's origin exactly — CORS will reject all browser requests otherwise.
+
+### 6.5 Deployment order
+
+1. Provision managed Postgres; confirm pgvector extension is enabled.
+2. Deploy backend to PaaS with all env vars from §6.3. Flyway runs V1–V7 on first startup — V7 widens the column to `vector(1536)` and rebuilds the HNSW index.
+3. Confirm `/actuator/health` returns `UP`.
+4. Build frontend image/bundle with `VITE_API_BASE_URL=https://<backend-domain>/api`; deploy to static host.
+5. Set `FRONTEND_ORIGIN=https://<frontend-domain>` on the backend and redeploy (env-var change only, no rebuild).
+6. Smoke test: register → upload resume → submit JD → run analysis → verify score and evidence appear.
 
 ---
 
