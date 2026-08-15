@@ -12,6 +12,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -65,6 +66,22 @@ class GeminiEmbeddingClientTest {
         assertThat(result).hasSize(2);
         assertThat(result.get(0)).containsExactly(0.1f, 0.2f, 0.3f);
         assertThat(result.get(1)).containsExactly(0.4f, 0.5f, 0.6f);
+        server.verify();
+    }
+
+    @Test
+    void embedBatch_requestBodyContainsQualifiedModelName() {
+        // Gemini's batchEmbedContents API requires "models/<name>" in the request-body
+        // model field. The URL path uses the bare name. Both must be distinct — this test
+        // pins the request-body contract so the wrong format can never silently regress.
+        server.expect(requestTo(BATCH_URL))
+                .andExpect(content().string(containsString("\"model\":\"models/gemini-embedding-2\"")))
+                .andRespond(withSuccess(
+                        "{\"embeddings\":[{\"values\":[0.1,0.2,0.3]}]}",
+                        MediaType.APPLICATION_JSON));
+
+        client.embed("java developer resume");
+
         server.verify();
     }
 

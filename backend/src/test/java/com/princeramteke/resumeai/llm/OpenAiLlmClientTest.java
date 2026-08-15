@@ -80,4 +80,45 @@ class OpenAiLlmClientTest {
     void providerName_isOpenai() {
         assertThat(client.providerName()).isEqualTo("openai");
     }
+
+    // --- Gemini compatibility ---
+
+    @Test
+    void complete_geminiEndpoint_omitsSeedFromRequest() {
+        String geminiUrl = "https://generativelanguage.googleapis.com/v1beta/openai/v1/chat/completions";
+        RestClient.Builder geminiBuilder = RestClient.builder();
+        MockRestServiceServer geminiServer = MockRestServiceServer.bindTo(geminiBuilder).build();
+        var geminiConfig = new LlmConfig("openai", 0.0, 42, null,
+                new LlmConfig.OpenAi("https://generativelanguage.googleapis.com/v1beta/openai",
+                        "gemini-2.0-flash", "test-key"));
+        OpenAiLlmClient geminiClient = new OpenAiLlmClient(geminiBuilder, geminiConfig);
+
+        geminiServer.expect(requestTo(geminiUrl))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.seed").doesNotExist())
+                .andExpect(jsonPath("$.temperature").value(0.0))
+                .andExpect(jsonPath("$.model").value("gemini-2.0-flash"))
+                .andRespond(withSuccess(
+                        "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"score\\\":85}\"}}],"
+                                + "\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":20}}",
+                        MediaType.APPLICATION_JSON));
+
+        LlmResponse response = geminiClient.complete(new LlmRequest("system", "user"));
+
+        assertThat(response.content()).isEqualTo("{\"score\":85}");
+        geminiServer.verify();
+    }
+
+    @Test
+    void complete_openaiEndpoint_includesSeedInRequest() {
+        server.expect(requestTo(URL))
+                .andExpect(jsonPath("$.seed").value(42))
+                .andRespond(withSuccess(
+                        "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"score\\\":72}\"}}],"
+                                + "\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5}}",
+                        MediaType.APPLICATION_JSON));
+
+        client.complete(new LlmRequest("s", "u"));
+        server.verify();
+    }
 }

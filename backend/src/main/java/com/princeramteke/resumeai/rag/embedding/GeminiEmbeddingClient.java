@@ -46,9 +46,13 @@ public class GeminiEmbeddingClient implements EmbeddingClient {
         log.info("Embedding batch started: provider=gemini, count={}", texts.size());
         String model = config.gemini().model();
         try {
+            // Gemini batchEmbedContents requires the fully-qualified resource name
+            // ("models/<name>") in every request-body EmbedRequest, even though the
+            // URL path already encodes the bare model name via {model} substitution.
+            String qualifiedModel = "models/" + model;
             List<BatchRequest.EmbedRequest> requests = texts.stream()
                     .map(t -> new BatchRequest.EmbedRequest(
-                            model,
+                            qualifiedModel,
                             new BatchRequest.Content(List.of(new BatchRequest.Part(t))),
                             new BatchRequest.EmbedConfig(config.dimensions())))
                     .toList();

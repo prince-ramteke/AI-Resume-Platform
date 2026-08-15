@@ -1,5 +1,6 @@
 package com.princeramteke.resumeai.llm;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.princeramteke.resumeai.llm.exception.LlmException;
 import org.slf4j.Logger;
@@ -36,12 +37,13 @@ public class OpenAiLlmClient implements LlmClient {
     public LlmResponse complete(LlmRequest request) {
         log.info("Chat completion started: provider=openai, model={}", config.openai().model());
         try {
+            boolean isGemini = config.openai().baseUrl().contains("googleapis.com");
             OpenAiChatRequest body = new OpenAiChatRequest(
                     config.openai().model(),
                     List.of(new OpenAiChatRequest.Message("system", request.systemPrompt()),
                             new OpenAiChatRequest.Message("user", request.userPrompt())),
                     config.temperature(),
-                    config.seed(),
+                    isGemini ? null : config.seed(),
                     new OpenAiChatRequest.ResponseFormat("json_object"));
 
             OpenAiChatResponse response = restClient.post()
@@ -74,6 +76,7 @@ public class OpenAiLlmClient implements LlmClient {
         return "openai";
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     record OpenAiChatRequest(String model, List<Message> messages, double temperature,
                              Integer seed,
                              @JsonProperty("response_format") ResponseFormat responseFormat) {
