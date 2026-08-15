@@ -25,3 +25,12 @@ npm-debug.log*
 
 # Local upload artifacts
 backend/uploads/
+
+# TypeScript incremental build cache (machine-generated, no source value)
+frontend/tsconfig.app.tsbuildinfo
+
+# Editor/tool backup files
+*.backup
+
+# Design handoff artifacts (implemented; not ongoing source)
+handoff/
