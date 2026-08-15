@@ -9,6 +9,7 @@ interface AuthHandlers {
   getToken: () => string | null;
   getRefreshToken: () => string | null;
   onUnauthorized: () => void;
+  refresh?: (newToken: string, newRefreshToken: string) => void;
 }
 
 let authHandlers: AuthHandlers | null = null;

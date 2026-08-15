@@ -14,17 +14,21 @@ function renderWithAuth(authed: boolean, initialPath: string) {
   const value: AuthState = authed
     ? {
         token: "t",
+        refreshToken: null,
         user: { id: 1, email: "u@e", role: "USER" },
         isAuthenticated: true,
         login: () => {},
         logout: () => {},
+        refresh: () => {},
       }
     : {
         token: null,
+        refreshToken: null,
         user: null,
         isAuthenticated: false,
         login: () => {},
         logout: () => {},
+        refresh: () => {},
       };
   return render(
     <AuthContext.Provider value={value}>
@@ -65,10 +69,12 @@ describe("ProtectedRoute", () => {
     let capturedNext: string | null = null;
     const value: AuthState = {
       token: null,
+      refreshToken: null,
       user: null,
       isAuthenticated: false,
       login: () => {},
       logout: () => {},
+      refresh: () => {},
     };
     function LoginProbe() {
       const url = new URL(window.location.href);

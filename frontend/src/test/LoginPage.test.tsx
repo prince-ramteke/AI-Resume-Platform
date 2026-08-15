@@ -17,10 +17,12 @@ import * as authApi from "../api/auth";
 function renderLogin() {
   const value: AuthState = {
     token: null,
+    refreshToken: null,
     user: null,
     isAuthenticated: false,
     login: vi.fn(),
     logout: vi.fn(),
+    refresh: vi.fn(),
   };
   return render(
     <AuthContext.Provider value={value}>

@@ -63,8 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       getToken: () => tokenRef.current,
       getRefreshToken: () => refreshTokenRef.current,
       onUnauthorized: logout,
+      refresh,
     });
-  }, [logout]);
+  }, [logout, refresh]);
 
   const value = useMemo<AuthState>(
     () => ({

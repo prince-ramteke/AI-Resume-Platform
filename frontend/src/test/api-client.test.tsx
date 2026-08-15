@@ -15,12 +15,14 @@ import { parseApiError } from "../api/errors";
 
 describe("apiClient interceptors", () => {
   let getToken: ReturnType<typeof vi.fn<() => string | null>>;
+  let getRefreshToken: ReturnType<typeof vi.fn<() => string | null>>;
   let onUnauthorized: ReturnType<typeof vi.fn<() => void>>;
 
   beforeEach(() => {
     getToken = vi.fn<() => string | null>();
+    getRefreshToken = vi.fn<() => string | null>();
     onUnauthorized = vi.fn<() => void>();
-    setAuthHandlers({ getToken, onUnauthorized });
+    setAuthHandlers({ getToken, getRefreshToken, onUnauthorized });
   });
 
   it("attaches Bearer token when getToken returns a value", async () => {
@@ -57,7 +59,7 @@ describe("apiClient interceptors", () => {
     const err = new AxiosError(
       "Unauthorized",
       "ERR_BAD_REQUEST",
-      undefined,
+      { headers: new AxiosHeaders() } as never,
       undefined,
       { status: 401 } as never
     );
