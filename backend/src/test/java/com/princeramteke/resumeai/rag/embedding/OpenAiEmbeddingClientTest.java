@@ -30,7 +30,7 @@ class OpenAiEmbeddingClientTest {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         var config = new EmbeddingConfig("openai", 3, null,
-                new EmbeddingConfig.OpenAi("https://api.openai.com", "text-embedding-3-small", "test-key"));
+                new EmbeddingConfig.OpenAi("https://api.openai.com", "text-embedding-3-small", "test-key"), null);
         client = new OpenAiEmbeddingClient(builder, config);
     }
 

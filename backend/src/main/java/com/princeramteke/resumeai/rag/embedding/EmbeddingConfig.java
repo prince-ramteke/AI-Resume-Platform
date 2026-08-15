@@ -13,7 +13,8 @@ public record EmbeddingConfig(
         String provider,
         int dimensions,
         Ollama ollama,
-        OpenAi openai
+        OpenAi openai,
+        Gemini gemini
 ) {
     public EmbeddingConfig {
         if (provider == null || provider.isBlank()) {
@@ -27,6 +28,9 @@ public record EmbeddingConfig(
         }
         if (openai == null) {
             openai = new OpenAi(null, null, null);
+        }
+        if (gemini == null) {
+            gemini = new Gemini(null, null, null);
         }
     }
 
@@ -48,6 +52,20 @@ public record EmbeddingConfig(
             }
             if (model == null || model.isBlank()) {
                 model = "text-embedding-3-small";
+            }
+            if (apiKey == null) {
+                apiKey = "";
+            }
+        }
+    }
+
+    public record Gemini(String baseUrl, String model, String apiKey) {
+        public Gemini {
+            if (baseUrl == null || baseUrl.isBlank()) {
+                baseUrl = "https://generativelanguage.googleapis.com";
+            }
+            if (model == null || model.isBlank()) {
+                model = "gemini-embedding-2";
             }
             if (apiKey == null) {
                 apiKey = "";

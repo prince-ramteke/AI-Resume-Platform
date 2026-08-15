@@ -27,7 +27,7 @@ class OllamaEmbeddingClientTest {
         builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         var config = new EmbeddingConfig("ollama", 3,
-                new EmbeddingConfig.Ollama("http://localhost:11434", "nomic-embed-text"), null);
+                new EmbeddingConfig.Ollama("http://localhost:11434", "nomic-embed-text"), null, null);
         client = new OllamaEmbeddingClient(builder, config);
     }
 
