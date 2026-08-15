@@ -1,0 +1,130 @@
+/* Resume Intelligence — marketing landing page theme.
+   Everything is scoped to .mkt-root so it cannot leak into the app's Tailwind @theme tokens.
+   Dark is the default; light is the [data-theme="light"] override on the same element.
+   Import once, from src/index.css:  @import "./marketing/theme.css";
+   Fonts: this page uses its own three families — see FONTS. */
+
+/* ---------- FONTS ----------
+   Either self-host these three (drop the .woff2 files in public/fonts and replace this
+   block with @font-face rules) or keep the two CDN imports below. */
+@import url("https://fonts.googleapis.com/css2?family=Libre+Caslon+Display&family=Geist+Mono:wght@300;400;500;600&display=swap");
+@import url("https://api.fontshare.com/v2/css?f%5B%5D=general-sans@200,300,400,500,600,700&display=swap");
+
+/* ---------- DARK (default) ---------- */
+.mkt-root{
+  --ink-1000:#04060A;--ink-900:#070A0F;--ink-850:#0A0E14;--ink-800:#0E131A;
+  --ink-700:#141A23;--ink-600:#1B222D;--ink-500:#252E3C;--ink-400:#36414F;--ink-300:#4B5665;
+  --fg-1:#F4F7FA;--fg-2:#AEB8C6;--fg-3:#7A8695;--fg-4:#525C6A;--fg-5:#3A4451;
+  --paper-100:#FCFAF6;--paper-200:#F4F0E8;--paper-300:#E6DFD1;--paper-400:#CFC5B2;
+  --paper-ink:#191712;--paper-ink-2:#5C564A;
+  --cyan-300:#A9E9F7;--cyan-400:#7BDBF0;--cyan-500:#4CC9E8;--cyan-600:#2A9CBC;--cyan-700:#186E88;
+  --amber-300:#F6DCA6;--amber-400:#EFC673;--amber-500:#E8B04B;--amber-600:#BE8A2E;
+  --signal-pass:#63D19B;--signal-warn:#E8B04B;--signal-fail:#F2685C;
+
+  --line-1:rgba(244,247,250,.07);--line-2:rgba(244,247,250,.12);--line-3:rgba(244,247,250,.20);
+  --border-subtle:var(--line-1);--border-default:var(--line-2);
+  --wash-1:rgba(244,247,250,.02);--wash-2:rgba(244,247,250,.05);--wash-3:rgba(244,247,250,.09);
+  --beam-blend:screen;
+
+  --bg-page:var(--ink-900);--surface-card:var(--ink-800);--text-on-accent:var(--ink-1000);
+  --glass:rgba(20,26,35,.62);--glass-border:rgba(244,247,250,.10);--glass-blur:blur(18px) saturate(1.15);
+
+  --shadow-1:0 1px 2px rgba(4,6,10,.50);
+  --shadow-2:0 8px 24px -10px rgba(4,6,10,.70),0 1px 2px rgba(4,6,10,.45);
+  --shadow-3:0 28px 64px -24px rgba(4,6,10,.85),0 2px 6px rgba(4,6,10,.50);
+  --shadow-4:0 60px 120px -40px rgba(4,6,10,.92),0 4px 12px rgba(4,6,10,.55);
+  --inner-light:inset 0 1px 0 rgba(244,247,250,.06);
+  --elev-card:var(--shadow-2),var(--inner-light);
+  --elev-paper:0 48px 90px -34px rgba(4,6,10,.88),0 3px 8px rgba(4,6,10,.55),inset 0 1px 0 rgba(255,255,255,.7);
+  --ring-focus:0 0 0 1px var(--bg-page),0 0 0 3px rgba(123,219,240,.45);
+
+  --grad-stage:radial-gradient(120% 80% at 50% -10%,#141A23 0%,#0A0E14 46%,#04060A 100%);
+  --grad-veil-bottom:linear-gradient(180deg,rgba(7,10,15,0) 0%,var(--ink-900) 78%);
+  --grad-card:linear-gradient(180deg,rgba(244,247,250,.035) 0%,rgba(244,247,250,0) 42%);
+  --grad-paper:linear-gradient(160deg,#FCFAF6 0%,#F4F0E8 68%,#EDE7DB 100%);
+  --grad-beam:linear-gradient(180deg,rgba(76,201,232,0) 0%,rgba(76,201,232,.55) 45%,rgba(76,201,232,0) 100%);
+  --grid-fine:linear-gradient(rgba(244,247,250,.028) 1px,transparent 1px) 0 0/100% 32px,linear-gradient(90deg,rgba(244,247,250,.028) 1px,transparent 1px) 0 0/32px 100%;
+
+  --font-display:"Libre Caslon Display","Times New Roman",serif;
+  --font-sans:"General Sans","Helvetica Neue",system-ui,sans-serif;
+  --font-mono:"Geist Mono","IBM Plex Mono",ui-monospace,monospace;
+  --fs-display-1:76px;--lh-display-1:0.96;--ls-display-1:-0.022em;
+  --fs-display-2:56px;--lh-display-2:1.00;--ls-display-2:-0.018em;
+  --fs-display-3:40px;--lh-display-3:1.06;--ls-display-3:-0.014em;
+  --fs-title-1:30px;--fs-title-2:22px;
+  --fs-body-lg:17px;--lh-body-lg:1.62;--fs-body:15px;--lh-body:1.60;
+  --fs-mono:13px;--fs-mono-sm:11px;--ls-mono-sm:0.01em;
+  --fs-eyebrow:10.5px;--ls-eyebrow:0.18em;
+  --fw-regular:400;--fw-medium:500;
+
+  --r-1:3px;--r-2:6px;--r-3:10px;--r-4:16px;--r-pill:999px;--r-paper:2px;
+  --r-control:var(--r-2);--r-card:var(--r-3);
+  --dur-2:200ms;--dur-3:320ms;--dur-4:560ms;--dur-5:900ms;
+  --ease-out:cubic-bezier(.16,1,.30,1);--ease-in-out:cubic-bezier(.65,0,.35,1);
+  --t-control:all var(--dur-2) var(--ease-out);--t-surface:all var(--dur-3) var(--ease-out);
+  --section-y:112px;--max-page:1240px;
+
+  background:var(--bg-page);
+  color:var(--fg-2);
+  font-family:var(--font-sans);
+  font-size:var(--fs-body);
+  line-height:var(--lh-body);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+/* ---------- LIGHT ---------- */
+.mkt-root[data-theme="light"]{
+  --ink-1000:#F2EFE9;--ink-900:#FAF8F4;--ink-850:#FFFFFF;--ink-800:#FFFFFF;
+  --ink-700:#F4F1EB;--ink-600:#EBE7E0;--ink-500:#DDD8CF;--ink-400:#C6C1B7;--ink-300:#A9A49A;
+  --fg-1:#16191E;--fg-2:#545E6B;--fg-3:#6E7885;--fg-4:#8A929D;--fg-5:#A7AEB8;
+  --paper-100:#FFFDF8;--paper-200:#F6F1E6;--paper-300:#EDE5D4;--paper-400:#D8CDB6;
+  --cyan-300:#2A9CBC;--cyan-400:#0F7E9E;--cyan-500:#1691B4;--cyan-600:#0C6B86;--cyan-700:#08505F;
+  --amber-300:#7A5509;--amber-400:#96690C;--amber-500:#B07C12;--amber-600:#8A5F0A;
+  --signal-pass:#1E7A52;--signal-warn:#9A6B00;--signal-fail:#B4341F;
+
+  --line-1:rgba(22,25,30,.10);--line-2:rgba(22,25,30,.16);--line-3:rgba(22,25,30,.26);
+  --border-subtle:var(--line-1);--border-default:var(--line-2);
+  --wash-1:rgba(30,34,42,.025);--wash-2:rgba(30,34,42,.04);--wash-3:rgba(22,25,30,.13);
+  --beam-blend:multiply;
+
+  --surface-card:#FFFFFF;--text-on-accent:#FFFFFF;
+  --glass:rgba(255,255,255,.72);--glass-border:rgba(22,25,30,.10);
+
+  --shadow-1:0 1px 2px rgba(30,34,42,.08);
+  --shadow-2:0 8px 24px -12px rgba(30,34,42,.16),0 1px 2px rgba(30,34,42,.07);
+  --shadow-3:0 26px 56px -26px rgba(30,34,42,.22),0 2px 6px rgba(30,34,42,.08);
+  --shadow-4:0 54px 110px -44px rgba(30,34,42,.26),0 4px 12px rgba(30,34,42,.10);
+  --inner-light:inset 0 1px 0 rgba(255,255,255,.9);
+  --elev-paper:0 0 0 1px rgba(30,34,42,.08),0 34px 70px -30px rgba(30,34,42,.30),0 3px 8px rgba(30,34,42,.12),inset 0 1px 0 rgba(255,255,255,.95);
+  --ring-focus:0 0 0 1px var(--bg-page),0 0 0 3px rgba(15,126,158,.42);
+
+  --grad-stage:radial-gradient(120% 80% at 50% -10%,#FFFFFF 0%,#FAF8F4 46%,#F3F0EA 100%);
+  --grad-veil-bottom:linear-gradient(180deg,rgba(250,248,244,0) 0%,var(--ink-900) 78%);
+  --grad-card:linear-gradient(180deg,rgba(30,34,42,.022) 0%,rgba(30,34,42,0) 42%);
+  --grad-paper:linear-gradient(160deg,#FFFDF8 0%,#F6F1E6 68%,#EDE5D4 100%);
+  --grad-beam:linear-gradient(180deg,rgba(22,145,180,0) 0%,rgba(22,145,180,.34) 45%,rgba(22,145,180,0) 100%);
+  --grid-fine:linear-gradient(rgba(12,107,134,.05) 1px,transparent 1px) 0 0/100% 32px,linear-gradient(90deg,rgba(12,107,134,.05) 1px,transparent 1px) 0 0/32px 100%;
+}
+
+/* ---------- scoped element defaults ---------- */
+.mkt-root h1,.mkt-root h2,.mkt-root h3{font-family:var(--font-display);font-weight:var(--fw-regular);color:var(--fg-1);margin:0;text-wrap:pretty}
+.mkt-root p{margin:0;text-wrap:pretty}
+.mkt-root a{color:var(--fg-1);text-decoration:none;transition:var(--t-control)}
+.mkt-root a:hover{color:var(--cyan-400)}
+.mkt-root ::selection{background:rgba(76,201,232,.20);color:var(--fg-1)}
+.mkt-root :focus-visible{outline:none;box-shadow:var(--ring-focus)}
+.mkt-eyebrow{font-family:var(--font-mono);font-size:var(--fs-eyebrow);letter-spacing:var(--ls-eyebrow);text-transform:uppercase;color:var(--fg-3)}
+
+/* ---------- keyframes ---------- */
+@keyframes mkt-scan{0%{top:-84px}100%{top:100%}}
+@keyframes mkt-float{0%{transform:translateY(0)}50%{transform:translateY(-10px)}100%{transform:translateY(0)}}
+@keyframes mkt-keyword{0%,14%{opacity:.25}30%,72%{opacity:1}100%{opacity:.25}}
+@keyframes mkt-drift{0%{transform:translate3d(0,0,0);opacity:0}18%{opacity:1}50%{transform:translate3d(6px,-22px,0)}82%{opacity:1}100%{transform:translate3d(-4px,-44px,0);opacity:0}}
+@keyframes mkt-travel{0%{transform:translateX(-40px);opacity:0}8%{opacity:.95}92%{opacity:.95}100%{transform:translateX(calc(100% + 1180px));opacity:0}}
+@keyframes mkt-marquee{0%{transform:translateX(0)}100%{transform:translateX(-2480px)}}
+
+@media (prefers-reduced-motion:reduce){
+  .mkt-root{--dur-2:1ms;--dur-3:1ms;--dur-4:1ms;--dur-5:1ms}
+  .mkt-root *{animation:none!important}
+}

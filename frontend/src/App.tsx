@@ -1,4 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { useAuth } from "./hooks/useAuth";
+import LandingPage from "./pages/marketing/LandingPage";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
 import { PublicOnlyRoute } from "./routes/PublicOnlyRoute";
 import { RoleRoute } from "./routes/RoleRoute";
@@ -17,9 +19,13 @@ import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 function App() {
+  const { isAuthenticated } = useAuth();
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route
+        path="/"
+        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />}
+      />
 
       {/* Public, auth-only pages */}
       <Route element={<PublicOnlyRoute />}>
