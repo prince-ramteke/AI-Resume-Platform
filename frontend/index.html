@@ -4,6 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Resume Intelligence Platform</title>
+    <script>
+      // Pre-paint: mirror the persisted authenticated-app theme onto <html>
+      // so .app-root can apply light/dark before first paint without flashing.
+      // Default is LIGHT. This does NOT touch the marketing .mkt-root scope
+      // (which resolves its own theme in LandingPage.tsx via ri-theme).
+      (function () {
+        try {
+          var t = localStorage.getItem("ri-app-theme");
+          if (t !== "light" && t !== "dark") t = "light";
+          document.documentElement.setAttribute("data-app-theme", t);
+        } catch (e) {
+          document.documentElement.setAttribute("data-app-theme", "light");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

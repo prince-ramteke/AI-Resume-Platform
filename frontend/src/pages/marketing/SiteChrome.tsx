@@ -287,9 +287,9 @@ export function Badge({ children, style }:{ children?: React.ReactNode; style?: 
 
 export function ThemeToggle(){
   const [theme, setTheme] = React.useState<string>(() => {
-    if (typeof document === "undefined") return "dark";
+    if (typeof document === "undefined") return "light";
     const root = document.querySelector<HTMLElement>(".mkt-root");
-    return root?.getAttribute("data-theme") || "dark";
+    return root?.getAttribute("data-theme") || "light";
   });
   const [hover, setHover] = React.useState(false);
   const apply = (t: string) => {

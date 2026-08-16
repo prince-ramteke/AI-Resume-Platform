@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./marketing/theme.css";
+@import "./app/theme.css";
 
 /* ------------------------------------------------------------------ */
 /* Self-hosted fonts (see public/fonts/README.md for the exact files)  */
