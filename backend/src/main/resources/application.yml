@@ -128,10 +128,11 @@ app:
     google-oauth-enabled: ${GOOGLE_OAUTH_ENABLED:false}
     notification-enabled: ${NOTIFICATION_ENABLED:false}
   notification:
-    # Resend transactional email — leave empty until the notification feature is enabled.
+    # Brevo transactional email — leave empty until the notification feature is enabled.
     # The notificationEnabled flag prevents outbound calls when these are unset.
-    resend-api-key: ${RESEND_API_KEY:}
-    sender-address: ${NOTIFICATION_SENDER_ADDRESS:}
+    brevo-api-key: ${BREVO_API_KEY:}
+    brevo-sender-email: ${BREVO_SENDER_EMAIL:}
+    brevo-sender-name: ${BREVO_SENDER_NAME:Resume Intelligence}
+    brevo-base-url: ${BREVO_BASE_URL:https://api.brevo.com}
     admin-email: ${NOTIFICATION_ADMIN_EMAIL:}
     frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
-    resend-base-url: ${RESEND_BASE_URL:https://api.resend.com}

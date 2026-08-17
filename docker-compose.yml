@@ -36,11 +36,17 @@ services:
       EMAIL_VERIFICATION_ENABLED: ${EMAIL_VERIFICATION_ENABLED:-false}
       NOTIFICATION_ENABLED: ${NOTIFICATION_ENABLED:-false}
       GOOGLE_OAUTH_ENABLED: ${GOOGLE_OAUTH_ENABLED:-false}
+      # Brevo transactional email provider
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-}
+      BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-Resume Intelligence}
+      BREVO_BASE_URL: ${BREVO_BASE_URL:-https://api.brevo.com}
+      NOTIFICATION_ADMIN_EMAIL: ${NOTIFICATION_ADMIN_EMAIL:-}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
+      # Legacy Resend variables — kept until Brevo is confirmed in production
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_BASE_URL: ${RESEND_BASE_URL:-https://api.resend.com}
       NOTIFICATION_SENDER_ADDRESS: ${NOTIFICATION_SENDER_ADDRESS:-}
-      NOTIFICATION_ADMIN_EMAIL: ${NOTIFICATION_ADMIN_EMAIL:-}
-      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
       # Persisted upload location; matches the named volume mounted below so
       # uploaded resumes/JDs survive container recreation (DB rows store paths).
       STORAGE_PATH: /app/uploads

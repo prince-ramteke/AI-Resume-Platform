@@ -39,13 +39,13 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 /**
  * Integration tests for the registration/email-delivery failure boundary.
  *
- * <p>Proves that when Resend returns a non-2xx response (or any exception) during
+ * <p>Proves that when Brevo returns a non-2xx response (or any exception) during
  * OTP email send, the LOCAL user registration transaction still commits — the user
  * row and email_verifications row are durable in PostgreSQL even though email delivery
  * failed.
  *
- * <p>Resend is replaced by an in-process {@link HttpServer} started before the Spring
- * context boots. {@link DynamicPropertySource} points {@code app.notification.resend-base-url}
+ * <p>Brevo is replaced by an in-process {@link HttpServer} started before the Spring
+ * context boots. {@link DynamicPropertySource} points {@code app.notification.brevo-base-url}
  * at the local server's port so no real API key or outbound call is ever made.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
@@ -65,40 +65,40 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 @Import(EmailDeliveryFailureIT.TestConfig.class)
 class EmailDeliveryFailureIT {
 
-    // ─── Mock Resend HTTP server ───────────────────────────────────────────────
+    // ─── Mock Brevo HTTP server ────────────────────────────────────────────────
     //
     // Must be started in the static initializer so the port is known before
     // @DynamicPropertySource is called (DynamicPropertySource fires before @BeforeAll).
 
     private static final AtomicInteger MOCK_STATUS = new AtomicInteger(200);
     private static final List<String> CAPTURED_BODIES = new CopyOnWriteArrayList<>();
-    private static final HttpServer MOCK_RESEND;
+    private static final HttpServer MOCK_BREVO;
 
     static {
         try {
-            MOCK_RESEND = HttpServer.create(new InetSocketAddress(0), 0);
-            MOCK_RESEND.createContext("/emails", exchange -> {
+            MOCK_BREVO = HttpServer.create(new InetSocketAddress(0), 0);
+            MOCK_BREVO.createContext("/v3/smtp/email", exchange -> {
                 byte[] req = exchange.getRequestBody().readAllBytes();
                 CAPTURED_BODIES.add(new String(req, StandardCharsets.UTF_8));
                 int status = MOCK_STATUS.get();
                 byte[] resp = (status < 300)
-                        ? "{\"id\":\"test-id\"}".getBytes(StandardCharsets.UTF_8)
-                        : "{\"name\":\"test_error\"}".getBytes(StandardCharsets.UTF_8);
+                        ? "{\"messageId\":\"<test-id@brevo>\"}".getBytes(StandardCharsets.UTF_8)
+                        : "{\"code\":\"test_error\"}".getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(status, resp.length);
                 try (OutputStream os = exchange.getResponseBody()) {
                     os.write(resp);
                 }
             });
-            MOCK_RESEND.start();
+            MOCK_BREVO.start();
         } catch (IOException e) {
-            throw new RuntimeException("Failed to start mock Resend server", e);
+            throw new RuntimeException("Failed to start mock Brevo server", e);
         }
     }
 
     @AfterAll
     static void stopMockServer() {
-        MOCK_RESEND.stop(0);
+        MOCK_BREVO.stop(0);
     }
 
     // ─── PostgreSQL container ─────────────────────────────────────────────────
@@ -116,11 +116,12 @@ class EmailDeliveryFailureIT {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
-        // Redirect all Resend HTTP calls to the local mock server — no real API key needed.
-        registry.add("app.notification.resend-base-url",
-                () -> "http://localhost:" + MOCK_RESEND.getAddress().getPort());
-        registry.add("app.notification.resend-api-key", () -> "test-key");
-        registry.add("app.notification.sender-address", () -> "noreply@test.dev");
+        // Redirect all Brevo HTTP calls to the local mock server — no real API key needed.
+        registry.add("app.notification.brevo-base-url",
+                () -> "http://localhost:" + MOCK_BREVO.getAddress().getPort());
+        registry.add("app.notification.brevo-api-key", () -> "test-brevo-key");
+        registry.add("app.notification.brevo-sender-email", () -> "noreply@test.dev");
+        registry.add("app.notification.brevo-sender-name", () -> "Resume Intelligence Test");
         registry.add("app.notification.admin-email", () -> "admin@test.dev");
     }
 
@@ -143,10 +144,10 @@ class EmailDeliveryFailureIT {
     // ─── Failure boundary tests ───────────────────────────────────────────────
 
     @Test
-    void register_resendNon2xx_transactionCommitsDespiteEmailFailure() {
+    void register_brevoNon2xx_transactionCommitsDespiteEmailFailure() {
         MOCK_STATUS.set(422);
 
-        // register() must succeed and return normally even though Resend rejects.
+        // register() must succeed and return normally even though Brevo rejects.
         assertThatCode(() ->
                 authService.register(new RegisterRequest("alice@example.com", "StrongPass1!", "Alice", null)))
                 .doesNotThrowAnyException();
@@ -167,7 +168,7 @@ class EmailDeliveryFailureIT {
     }
 
     @Test
-    void register_resendNon2xx_userEmailVerifiedRemainsFlase() {
+    void register_brevoNon2xx_userEmailVerifiedRemainsFlase() {
         MOCK_STATUS.set(500);
 
         authService.register(new RegisterRequest("bob@example.com", "StrongPass1!", null, null));
@@ -178,7 +179,7 @@ class EmailDeliveryFailureIT {
     }
 
     @Test
-    void register_resendNon2xx_subsequentResendCreatesNewRecord() {
+    void register_brevoNon2xx_subsequentResendCreatesNewRecord() {
         MOCK_STATUS.set(422); // first OTP email fails
         authService.register(new RegisterRequest("carol@example.com", "StrongPass1!", null, null));
 
@@ -203,7 +204,7 @@ class EmailDeliveryFailureIT {
     }
 
     @Test
-    void resendOtp_resendNon2xx_resendRecordStillCommitted() {
+    void resendOtp_brevoNon2xx_resendRecordStillCommitted() {
         // Initial registration succeeds.
         MOCK_STATUS.set(200);
         authService.register(new RegisterRequest("dave@example.com", "StrongPass1!", null, null));
@@ -230,13 +231,13 @@ class EmailDeliveryFailureIT {
     // ─── Payload verification tests ───────────────────────────────────────────
 
     @Test
-    void register_resendSuccess_otpEmailPayloadContainsRecipientAndSixDigitCode() {
+    void register_brevoSuccess_otpEmailPayloadContainsRecipientAndSixDigitCode() {
         MOCK_STATUS.set(200);
 
         authService.register(new RegisterRequest("eve@example.com", "StrongPass1!", "Eve", null));
 
         // OTP email is sent synchronously within register() — it is the first captured body.
-        assertThat(CAPTURED_BODIES).as("mock Resend server must receive at least one call").isNotEmpty();
+        assertThat(CAPTURED_BODIES).as("mock Brevo server must receive at least one call").isNotEmpty();
         String otpPayload = CAPTURED_BODIES.get(0);
 
         // Recipient and sender
@@ -253,7 +254,7 @@ class EmailDeliveryFailureIT {
     }
 
     @Test
-    void register_resendSuccess_payloadDoesNotContainPasswordOrApiKey() {
+    void register_brevoSuccess_payloadDoesNotContainPasswordOrApiKey() {
         MOCK_STATUS.set(200);
 
         authService.register(new RegisterRequest("frank@example.com", "S3cr3tPass!", null, null));
@@ -266,20 +267,20 @@ class EmailDeliveryFailureIT {
                     .doesNotContain("S3cr3tPass!");
             assertThat(body)
                     .as("API key must never appear in any email payload")
-                    .doesNotContain("test-key");
+                    .doesNotContain("test-brevo-key");
         }
     }
 
     @Test
-    void register_resendSuccess_fromFieldMatchesConfiguredSenderAddress() {
+    void register_brevoSuccess_senderEmailInPayload() {
         MOCK_STATUS.set(200);
 
         authService.register(new RegisterRequest("grace@example.com", "StrongPass1!", null, null));
 
         assertThat(CAPTURED_BODIES).isNotEmpty();
         String otpPayload = CAPTURED_BODIES.get(0);
-        // The JSON "from" field must carry the configured sender address.
-        assertThat(otpPayload).contains("\"from\"");
+        // The Brevo "sender" object must carry the configured sender email.
+        assertThat(otpPayload).contains("\"sender\"");
         assertThat(otpPayload).contains("noreply@test.dev");
     }
 

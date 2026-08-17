@@ -14,9 +14,9 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-public class ResendEmailClient implements EmailService {
+public class BrevoEmailClient implements EmailService {
 
-    private static final Logger log = LoggerFactory.getLogger(ResendEmailClient.class);
+    private static final Logger log = LoggerFactory.getLogger(BrevoEmailClient.class);
 
     // Delays between successive attempts: [0, 500, 1000, 2000] ms.
     // Attempt 1 is immediate; attempts 2-4 wait the corresponding delay before retrying.
@@ -28,21 +28,21 @@ public class ResendEmailClient implements EmailService {
     private final long[] retryDelaysMs;
 
     @Autowired
-    public ResendEmailClient(RestClient.Builder builder,
-                             NotificationConfig config,
-                             FeatureFlags featureFlags) {
+    public BrevoEmailClient(RestClient.Builder builder,
+                            NotificationConfig config,
+                            FeatureFlags featureFlags) {
         this(builder, config, featureFlags, DEFAULT_RETRY_DELAYS_MS);
     }
 
     // Package-private: allows tests to inject zero delays for deterministic, fast execution.
-    ResendEmailClient(RestClient.Builder builder,
-                      NotificationConfig config,
-                      FeatureFlags featureFlags,
-                      long[] retryDelaysMs) {
+    BrevoEmailClient(RestClient.Builder builder,
+                     NotificationConfig config,
+                     FeatureFlags featureFlags,
+                     long[] retryDelaysMs) {
         this.config = config;
         this.featureFlags = featureFlags;
         this.retryDelaysMs = retryDelaysMs;
-        this.restClient = builder.baseUrl(config.resendBaseUrl()).build();
+        this.restClient = builder.baseUrl(config.brevoBaseUrl()).build();
     }
 
     @Override
@@ -118,14 +118,17 @@ public class ResendEmailClient implements EmailService {
 
     private void send(String to, String subject, String html) {
         Map<String, Object> body = Map.of(
-                "from", config.senderAddress(),
-                "to", List.of(to),
+                "sender", Map.of(
+                        "name", config.brevoSenderName(),
+                        "email", config.brevoSenderEmail()
+                ),
+                "to", List.of(Map.of("email", to)),
                 "subject", subject,
-                "html", html
+                "htmlContent", html
         );
         restClient.post()
-                .uri("/emails")
-                .header("Authorization", "Bearer " + config.resendApiKey())
+                .uri("/v3/smtp/email")
+                .header("api-key", config.brevoApiKey())
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body)
                 .retrieve()
