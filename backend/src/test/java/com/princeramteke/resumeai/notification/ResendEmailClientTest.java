@@ -14,6 +14,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
+import static org.springframework.test.web.client.ExpectedCount.*;
 
 class ResendEmailClientTest {
 
@@ -27,6 +28,9 @@ class ResendEmailClientTest {
     private static final FeatureFlags ENABLED  = new FeatureFlags(false, false, true);
     private static final FeatureFlags DISABLED = new FeatureFlags(false, false, false);
 
+    // Zero-delay backoff: [0,0,0,0] — retries immediately so tests are fast.
+    private static final long[] ZERO_DELAYS = {0L, 0L, 0L, 0L};
+
     private MockRestServiceServer server;
     private ResendEmailClient clientEnabled;
     private ResendEmailClient clientDisabled;
@@ -35,10 +39,10 @@ class ResendEmailClientTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
-        clientEnabled  = new ResendEmailClient(builder, CONFIG, ENABLED);
+        clientEnabled  = new ResendEmailClient(builder, CONFIG, ENABLED, ZERO_DELAYS);
 
         RestClient.Builder disabledBuilder = RestClient.builder();
-        clientDisabled = new ResendEmailClient(disabledBuilder, CONFIG, DISABLED);
+        clientDisabled = new ResendEmailClient(disabledBuilder, CONFIG, DISABLED, ZERO_DELAYS);
     }
 
     // ─── notificationEnabled=false — no HTTP calls ────────────────────────────
@@ -134,10 +138,71 @@ class ResendEmailClientTest {
         // When admin email is not configured the client must skip silently.
         var configNoAdmin = new NotificationConfig("test-api-key", "noreply@resumeai.dev", "", "http://localhost:5173", "https://api.resend.com");
         RestClient.Builder b = RestClient.builder();
-        var client = new ResendEmailClient(b, configNoAdmin, ENABLED);
+        var client = new ResendEmailClient(b, configNoAdmin, ENABLED, ZERO_DELAYS);
 
         assertThatCode(() -> client.sendAdminNotification(
                 "A", "B", "c@example.com", "LOCAL", Instant.now(), 1L))
                 .doesNotThrowAnyException();
+    }
+
+    // ─── retry: transient I/O failures ───────────────────────────────────────
+
+    @Test
+    void sendWelcomeEmail_transientIoFailureThenSuccess_retriesAndSucceeds() {
+        // Attempts 1-2 fail with I/O error; attempt 3 succeeds. Exactly 3 HTTP calls expected.
+        server.expect(times(2), requestTo("https://api.resend.com/emails"))
+                .andRespond(withException(new java.io.IOException("socket reset")));
+        server.expect(once(), requestTo("https://api.resend.com/emails"))
+                .andRespond(withSuccess("{\"id\":\"ok\"}", MediaType.APPLICATION_JSON));
+
+        assertThatCode(() -> clientEnabled.sendWelcomeEmail("u@example.com", "U"))
+                .doesNotThrowAnyException();
+        server.verify();
+    }
+
+    @Test
+    void sendWelcomeEmail_allAttemptsTransientFailure_swallowedNotThrown() {
+        // All 4 attempts fail with I/O error — must not propagate out of sendWelcomeEmail.
+        server.expect(times(4), requestTo("https://api.resend.com/emails"))
+                .andRespond(withException(new java.io.IOException("connection refused")));
+
+        assertThatCode(() -> clientEnabled.sendWelcomeEmail("u@example.com", "U"))
+                .doesNotThrowAnyException();
+        server.verify();
+    }
+
+    @Test
+    void sendWelcomeEmail_http403_noRetry_exactlyOneHttpCall() {
+        // 403 is a permanent HTTP error — must not trigger any retry.
+        server.expect(once(), requestTo("https://api.resend.com/emails"))
+                .andRespond(withStatus(org.springframework.http.HttpStatus.FORBIDDEN));
+
+        assertThatCode(() -> clientEnabled.sendWelcomeEmail("u@example.com", "U"))
+                .doesNotThrowAnyException();
+        server.verify(); // exactly 1 call
+    }
+
+    @Test
+    void sendWelcomeEmail_http422_noRetry_exactlyOneHttpCall() {
+        // 422 (Resend validation error) is permanent — no retry.
+        server.expect(once(), requestTo("https://api.resend.com/emails"))
+                .andRespond(withStatus(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY));
+
+        assertThatCode(() -> clientEnabled.sendWelcomeEmail("u@example.com", "U"))
+                .doesNotThrowAnyException();
+        server.verify(); // exactly 1 call
+    }
+
+    @Test
+    void sendWelcomeEmail_success_exactlyOneHttpCall() {
+        // Happy path unchanged: one successful attempt, no spurious retries.
+        server.expect(once(), requestTo("https://api.resend.com/emails"))
+                .andExpect(method(org.springframework.http.HttpMethod.POST))
+                .andExpect(header("Authorization", "Bearer test-api-key"))
+                .andRespond(withSuccess("{\"id\":\"xyz\"}", MediaType.APPLICATION_JSON));
+
+        clientEnabled.sendWelcomeEmail("alice@example.com", "Alice");
+
+        server.verify(); // exactly 1 call
     }
 }

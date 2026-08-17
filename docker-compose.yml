@@ -32,6 +32,15 @@ services:
       OLLAMA_BASE_URL: http://ollama:11434
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       FRONTEND_ORIGIN: http://localhost:5173
+      # Phase 5 — transactional email & feature flags
+      EMAIL_VERIFICATION_ENABLED: ${EMAIL_VERIFICATION_ENABLED:-false}
+      NOTIFICATION_ENABLED: ${NOTIFICATION_ENABLED:-false}
+      GOOGLE_OAUTH_ENABLED: ${GOOGLE_OAUTH_ENABLED:-false}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_BASE_URL: ${RESEND_BASE_URL:-https://api.resend.com}
+      NOTIFICATION_SENDER_ADDRESS: ${NOTIFICATION_SENDER_ADDRESS:-}
+      NOTIFICATION_ADMIN_EMAIL: ${NOTIFICATION_ADMIN_EMAIL:-}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
       # Persisted upload location; matches the named volume mounted below so
       # uploaded resumes/JDs survive container recreation (DB rows store paths).
       STORAGE_PATH: /app/uploads
