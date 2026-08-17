@@ -339,11 +339,23 @@ export function SiteNav(){
 }
 
 export function SiteFooter(){
-  const cols: [string, string[]][] = [
-    ["Product", ["Overview","ATS analysis","Hybrid retrieval","Evidence engine"]],
-    ["Company", ["About","Careers","Security","Contact"]],
-    ["Resources",["Documentation","Changelog","Status","Privacy"]]
+  const productLinks: [string, string][] = [
+    ["Overview", "/"],
+    ["How it works", "#how-it-works"],
+    ["ATS analysis", "#ats-analysis"],
+    ["Evidence engine", "#evidence-engine"]
   ];
+  const projectLinks: [string, string][] = [
+    ["GitHub", "https://github.com/prince-ramteke/AI-Resume-Platform"],
+    ["Documentation", "https://github.com/prince-ramteke/AI-Resume-Platform/tree/main/docs"],
+    ["Architecture", "https://github.com/prince-ramteke/AI-Resume-Platform/blob/main/docs/SYSTEM_ARCHITECTURE.md"]
+  ];
+  const connectLinks: [string, string][] = [
+    ["LinkedIn", "https://www.linkedin.com/in/prince-ramteke-13178a348/"],
+    ["prince.ramteke.tech@gmail.com", "mailto:prince.ramteke.tech@gmail.com"],
+    ["princeramteke575@gmail.com", "mailto:princeramteke575@gmail.com"]
+  ];
+
   return (
     <footer style={{ borderTop:"1px solid var(--line-1)", padding:"64px 44px 44px", background:"var(--ink-1000)" }}>
       <div style={{ maxWidth:"var(--max-page)", margin:"0 auto", display:"grid", gridTemplateColumns:"1.4fr repeat(3,1fr)", gap:"48px" }}>
@@ -355,18 +367,38 @@ export function SiteFooter(){
             Career intelligence for people who would rather read the evidence than trust a score.
           </p>
         </div>
-        {cols.map(([h, items]) => (
-          <div key={h}>
-            <div className="mkt-eyebrow">{h}</div>
-            <div style={{ marginTop:"16px", display:"flex", flexDirection:"column", gap:"10px" }}>
-              {items.map(i => <a key={i} href="#" style={{ fontSize:"13px", color:"var(--fg-3)" }}>{i}</a>)}
-            </div>
+        <div>
+          <div className="mkt-eyebrow">Product</div>
+          <div style={{ marginTop:"16px", display:"flex", flexDirection:"column", gap:"10px" }}>
+            {productLinks.map(([label, href]) => (
+              href.startsWith("http")
+                ? <a key={label} href={href} target="_blank" rel="noopener noreferrer" style={{ fontSize:"13px", color:"var(--fg-3)" }}>{label}</a>
+                : href.startsWith("#") || href === "/"
+                ? <a key={label} href={href} style={{ fontSize:"13px", color:"var(--fg-3)" }}>{label}</a>
+                : <span key={label} style={{ fontSize:"13px", color:"var(--fg-3)" }}>{label}</span>
+            ))}
           </div>
-        ))}
+        </div>
+        <div>
+          <div className="mkt-eyebrow">Project</div>
+          <div style={{ marginTop:"16px", display:"flex", flexDirection:"column", gap:"10px" }}>
+            {projectLinks.map(([label, href]) => (
+              <a key={label} href={href} target="_blank" rel="noopener noreferrer" style={{ fontSize:"13px", color:"var(--fg-3)" }}>{label}</a>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="mkt-eyebrow">Connect</div>
+          <div style={{ marginTop:"16px", display:"flex", flexDirection:"column", gap:"10px" }}>
+            {connectLinks.map(([label, href]) => (
+              <a key={label} href={href} {...(href.startsWith("http") ? { target:"_blank", rel:"noopener noreferrer" } : {})} style={{ fontSize:"13px", color:"var(--fg-3)" }}>{label}</a>
+            ))}
+          </div>
+        </div>
       </div>
       <div style={{ maxWidth:"var(--max-page)", margin:"48px auto 0", paddingTop:"22px", borderTop:"1px solid var(--line-1)",
         display:"flex", justifyContent:"space-between", fontFamily:"var(--font-mono)", fontSize:"10.5px", letterSpacing:".06em", color:"var(--fg-5)" }}>
-        <span>© 2026</span><span>SOC 2 TYPE II · GDPR</span>
+        <span>© 2026 Prince Ramteke · AI Resume Intelligence Platform</span>
       </div>
     </footer>
   );

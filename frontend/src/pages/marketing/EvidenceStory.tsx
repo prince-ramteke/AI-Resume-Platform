@@ -18,7 +18,7 @@ export function EvidenceStory(){
     ["Missing", ["vector database","reranking"],                   false]
   ];
   return (
-    <section data-screen-label="Evidence engine" style={{ padding:"var(--section-y) 44px", borderTop:"1px solid var(--line-1)" }}>
+    <section id="evidence-engine" data-screen-label="Evidence engine" style={{ padding:"var(--section-y) 44px", borderTop:"1px solid var(--line-1)" }}>
       <div style={{ maxWidth:"var(--max-page)", margin:"0 auto" }}>
         <Reveal><SectionHead eyebrow="Evidence engine"
           title="A score is only useful if you can argue with it"

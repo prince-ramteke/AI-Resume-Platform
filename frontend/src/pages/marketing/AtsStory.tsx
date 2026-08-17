@@ -11,7 +11,7 @@ const RI_METRICS: [string, number, "amber" | "cyan" | "pass", string][] = [
 export function AtsStory(){
   const [ref, seen] = useReveal(.3);
   return (
-    <section data-screen-label="ATS analysis" style={{ position:"relative", padding:"var(--section-y) 44px", borderTop:"1px solid var(--line-1)" }}>
+    <section id="ats-analysis" data-screen-label="ATS analysis" style={{ position:"relative", padding:"var(--section-y) 44px", borderTop:"1px solid var(--line-1)" }}>
       <div style={{ maxWidth:"var(--max-page)", margin:"0 auto" }}>
         <Reveal><SectionHead eyebrow="ATS analysis"
           title="What a tracking system sees before a person does"
