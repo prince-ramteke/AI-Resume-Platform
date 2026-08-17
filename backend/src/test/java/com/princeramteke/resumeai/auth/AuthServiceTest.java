@@ -2,9 +2,14 @@ package com.princeramteke.resumeai.auth;
 
 import com.princeramteke.resumeai.auth.dto.LoginRequest;
 import com.princeramteke.resumeai.auth.dto.RegisterRequest;
+import com.princeramteke.resumeai.auth.dto.ResendOtpRequest;
+import com.princeramteke.resumeai.auth.dto.VerifyEmailRequest;
 import com.princeramteke.resumeai.auth.exception.EmailAlreadyExistsException;
 import com.princeramteke.resumeai.auth.exception.EmailNotVerifiedException;
 import com.princeramteke.resumeai.auth.exception.InvalidCredentialsException;
+import com.princeramteke.resumeai.auth.exception.OtpInvalidException;
+import com.princeramteke.resumeai.auth.exception.OtpResendTooSoonException;
+import com.princeramteke.resumeai.auth.exception.TooManyOtpAttemptsException;
 import com.princeramteke.resumeai.config.FeatureFlags;
 import com.princeramteke.resumeai.config.OtpConfig;
 import com.princeramteke.resumeai.security.JwtTokenProvider;
@@ -16,6 +21,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -24,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
+import static org.assertj.core.api.InstanceOfAssertFactories.INTEGER;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -310,7 +319,212 @@ class AuthServiceTest {
         verify(refreshTokenRepository, never()).save(any());
     }
 
+    // ─── verifyEmail ─────────────────────────────────────────────────────────────
+
+    @Test
+    void verifyEmail_correctOtp_marksVerifiedAndReturnsSuccess() {
+        var service = serviceWithEmailFlagOn();
+        var user = userWithId(10L, "alice@example.com");
+        var otp = "482931";
+        var verification = new EmailVerification(user, sha256(otp), Instant.now().plusSeconds(600));
+
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
+        when(emailVerificationRepository.findLatestNotExpiredNotUsedByUserId(any(Long.class), any(Instant.class)))
+                .thenReturn(Optional.of(verification));
+
+        var response = service.verifyEmail(new VerifyEmailRequest("alice@example.com", otp));
+
+        assertThat(response.message()).contains("verified");
+        assertThat(user.isEmailVerified()).isTrue();
+        verify(emailVerificationRepository).save(verification);
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void verifyEmail_wrongOtp_throwsOtpInvalidAndIncrementsCounter() {
+        var service = serviceWithEmailFlagOn();
+        var user = userWithId(10L, "alice@example.com");
+        var verification = new EmailVerification(user, sha256("111111"), Instant.now().plusSeconds(600));
+
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
+        when(emailVerificationRepository.findLatestNotExpiredNotUsedByUserId(any(Long.class), any(Instant.class)))
+                .thenReturn(Optional.of(verification));
+
+        assertThatThrownBy(() -> service.verifyEmail(new VerifyEmailRequest("alice@example.com", "999999")))
+                .isInstanceOf(OtpInvalidException.class);
+
+        assertThat(verification.getAttemptCount()).isEqualTo(1);
+        verify(emailVerificationRepository).save(verification);
+        assertThat(user.isEmailVerified()).isFalse();
+    }
+
+    @Test
+    void verifyEmail_fifthFailedAttempt_throwsTooManyAttempts() {
+        var service = serviceWithEmailFlagOn();
+        var user = userWithId(10L, "alice@example.com");
+        var verification = new EmailVerification(user, sha256("111111"), Instant.now().plusSeconds(600));
+        for (int i = 0; i < 4; i++) verification.incrementAttemptCount();
+
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
+        when(emailVerificationRepository.findLatestNotExpiredNotUsedByUserId(any(Long.class), any(Instant.class)))
+                .thenReturn(Optional.of(verification));
+
+        assertThatThrownBy(() -> service.verifyEmail(new VerifyEmailRequest("alice@example.com", "999999")))
+                .isInstanceOf(TooManyOtpAttemptsException.class);
+
+        assertThat(verification.getAttemptCount()).isEqualTo(5);
+        verify(emailVerificationRepository).save(verification);
+    }
+
+    @Test
+    void verifyEmail_alreadyLockedVerification_throwsTooManyAttemptsWithoutFurtherIncrement() {
+        var service = serviceWithEmailFlagOn();
+        var user = userWithId(10L, "alice@example.com");
+        var verification = new EmailVerification(user, sha256("111111"), Instant.now().plusSeconds(600));
+        for (int i = 0; i < 5; i++) verification.incrementAttemptCount();
+
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
+        when(emailVerificationRepository.findLatestNotExpiredNotUsedByUserId(any(Long.class), any(Instant.class)))
+                .thenReturn(Optional.of(verification));
+
+        assertThatThrownBy(() -> service.verifyEmail(new VerifyEmailRequest("alice@example.com", "111111")))
+                .isInstanceOf(TooManyOtpAttemptsException.class);
+
+        // Lock check fires before the hash comparison — counter must not increment further.
+        assertThat(verification.getAttemptCount()).isEqualTo(5);
+        verify(emailVerificationRepository, never()).save(any());
+    }
+
+    @Test
+    void verifyEmail_noActiveVerification_throwsOtpInvalid() {
+        var service = serviceWithEmailFlagOn();
+        var user = userWithId(10L, "alice@example.com");
+
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
+        when(emailVerificationRepository.findLatestNotExpiredNotUsedByUserId(any(Long.class), any(Instant.class)))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.verifyEmail(new VerifyEmailRequest("alice@example.com", "123456")))
+                .isInstanceOf(OtpInvalidException.class);
+    }
+
+    @Test
+    void verifyEmail_unknownEmail_throwsOtpInvalidForAntiEnumeration() {
+        var service = serviceWithEmailFlagOn();
+        when(userRepository.findByEmail("ghost@example.com")).thenReturn(Optional.empty());
+
+        // Must throw OtpInvalidException — not a user-existence-leaking 404.
+        assertThatThrownBy(() -> service.verifyEmail(new VerifyEmailRequest("ghost@example.com", "123456")))
+                .isInstanceOf(OtpInvalidException.class);
+
+        verifyNoInteractions(emailVerificationRepository);
+    }
+
+    // ─── resendOtp ────────────────────────────────────────────────────────────────
+
+    @Test
+    void resendOtp_validUnverifiedUser_createsNewOtpRecord() {
+        var service = serviceWithEmailFlagOn();
+        var user = userWithId(11L, "bob@example.com");
+
+        when(userRepository.findByEmail("bob@example.com")).thenReturn(Optional.of(user));
+        when(emailVerificationRepository.findMostRecentByUserId(11L)).thenReturn(Optional.empty());
+
+        var response = service.resendOtp(new ResendOtpRequest("bob@example.com"));
+
+        assertThat(response.message()).contains("registered");
+        verify(emailVerificationRepository).save(any(EmailVerification.class));
+    }
+
+    @Test
+    void resendOtp_unknownEmail_returnsGenericSuccessWithoutRepositoryCall() {
+        var service = serviceWithEmailFlagOn();
+        when(userRepository.findByEmail("ghost@example.com")).thenReturn(Optional.empty());
+
+        var response = service.resendOtp(new ResendOtpRequest("ghost@example.com"));
+
+        assertThat(response.message()).contains("registered");
+        verifyNoInteractions(emailVerificationRepository);
+    }
+
+    @Test
+    void resendOtp_alreadyVerifiedUser_returnsGenericSuccessForAntiEnumeration() {
+        var service = serviceWithEmailFlagOn();
+        var user = userWithId(11L, "alice@example.com");
+        user.setEmailVerified(true);
+
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
+
+        var response = service.resendOtp(new ResendOtpRequest("alice@example.com"));
+
+        assertThat(response.message()).contains("registered");
+        verifyNoInteractions(emailVerificationRepository);
+    }
+
+    @Test
+    void resendOtp_withinCooldown_throwsOtpResendTooSoonWithRetryAfterSeconds() {
+        var service = serviceWithEmailFlagOn();
+        var user = userWithId(11L, "bob@example.com");
+        var recent = new EmailVerification(user, sha256("123456"), Instant.now().plusSeconds(600));
+        setCreatedAt(recent, Instant.now().minusSeconds(30)); // 30s ago; cooldown is 60s
+
+        when(userRepository.findByEmail("bob@example.com")).thenReturn(Optional.of(user));
+        when(emailVerificationRepository.findMostRecentByUserId(11L)).thenReturn(Optional.of(recent));
+
+        assertThatThrownBy(() -> service.resendOtp(new ResendOtpRequest("bob@example.com")))
+                .isInstanceOf(OtpResendTooSoonException.class)
+                .extracting(e -> ((OtpResendTooSoonException) e).getRetryAfterSeconds())
+                .asInstanceOf(INTEGER)
+                .isBetween(1, 60);
+    }
+
+    @Test
+    void resendOtp_afterCooldownExpired_createsNewOtpRecord() {
+        var service = serviceWithEmailFlagOn();
+        var user = userWithId(11L, "bob@example.com");
+        var old = new EmailVerification(user, sha256("111111"), Instant.now().plusSeconds(600));
+        setCreatedAt(old, Instant.now().minusSeconds(200)); // 200s ago; well past the 60s cooldown
+
+        when(userRepository.findByEmail("bob@example.com")).thenReturn(Optional.of(user));
+        when(emailVerificationRepository.findMostRecentByUserId(11L)).thenReturn(Optional.of(old));
+
+        var response = service.resendOtp(new ResendOtpRequest("bob@example.com"));
+
+        assertThat(response.message()).contains("registered");
+        verify(emailVerificationRepository).save(any(EmailVerification.class));
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    private AuthService serviceWithEmailFlagOn() {
+        return new AuthService(userRepository, refreshTokenRepository, passwordEncoder,
+                tokenProvider, 7, FLAGS_EMAIL_ON, OTP_CONFIG, emailVerificationRepository);
+    }
+
+    private String sha256(String input) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            var sb = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) sb.append('0');
+                sb.append(hex);
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void setCreatedAt(EmailVerification ev, Instant instant) {
+        try {
+            var field = EmailVerification.class.getDeclaredField("createdAt");
+            field.setAccessible(true);
+            field.set(ev, instant);
+        } catch (Exception ignored) {
+        }
+    }
 
     private User userWithId(Long id, String email) {
         var user = new User(email, "$2a$10$hashed");

@@ -197,6 +197,36 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <!-- Run only the OTP transaction IT. Other *IT.java files in the
+                         project (RetrievalEvaluationHarnessIT, RetrievalTuningIT)
+                         require rag-eval fixture files that are not checked in and
+                         would fail if activated here. -->
+                    <includes>
+                        <include>**/OtpTransactionIT.java</include>
+                    </includes>
+                    <!-- docker-java defaults to API version v1.32 in versioned URL paths.
+                         Docker Desktop 4.x (engine 29.x) requires minimum v1.40; requests
+                         below that threshold return 400. Pinning to 1.44 here (the minimum
+                         that all Docker engines on GitHub Actions ubuntu-latest support)
+                         makes this work on both Windows Docker Desktop and Linux CI without
+                         hardcoding a platform-specific socket or TCP host. -->
+                    <systemPropertyVariables>
+                        <api.version>1.44</api.version>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>

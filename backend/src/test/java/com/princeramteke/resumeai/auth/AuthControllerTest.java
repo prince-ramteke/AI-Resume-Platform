@@ -3,6 +3,9 @@ package com.princeramteke.resumeai.auth;
 import com.princeramteke.resumeai.auth.dto.*;
 import com.princeramteke.resumeai.auth.exception.EmailAlreadyExistsException;
 import com.princeramteke.resumeai.auth.exception.InvalidCredentialsException;
+import com.princeramteke.resumeai.auth.exception.OtpInvalidException;
+import com.princeramteke.resumeai.auth.exception.OtpResendTooSoonException;
+import com.princeramteke.resumeai.auth.exception.TooManyOtpAttemptsException;
 import com.princeramteke.resumeai.common.exception.GlobalExceptionHandler;
 import com.princeramteke.resumeai.config.CorsConfig;
 import com.princeramteke.resumeai.config.FeatureFlags;
@@ -231,6 +234,117 @@ class AuthControllerTest {
     void protectedEndpoint_noToken_returns401() throws Exception {
         mockMvc.perform(get("/api/resumes"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ─── verify-email endpoint ────────────────────────────────────────────────────
+
+    @Test
+    void verifyEmail_validRequest_returns200() throws Exception {
+        when(authService.verifyEmail(any())).thenReturn(new VerifyEmailResponse("Email verified successfully"));
+
+        mockMvc.perform(post("/api/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"prince@example.com","otp":"123456"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Email verified successfully"));
+    }
+
+    @Test
+    void verifyEmail_otpTooShort_returns400() throws Exception {
+        mockMvc.perform(post("/api/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"prince@example.com","otp":"12345"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void verifyEmail_otpNonNumeric_returns400() throws Exception {
+        mockMvc.perform(post("/api/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"prince@example.com","otp":"ABCDEF"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void verifyEmail_wrongOtp_returns401() throws Exception {
+        when(authService.verifyEmail(any())).thenThrow(new OtpInvalidException());
+
+        mockMvc.perform(post("/api/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"prince@example.com","otp":"999999"}
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    void verifyEmail_lockedAccount_returns423() throws Exception {
+        when(authService.verifyEmail(any())).thenThrow(new TooManyOtpAttemptsException());
+
+        mockMvc.perform(post("/api/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"prince@example.com","otp":"999999"}
+                                """))
+                .andExpect(status().isLocked())
+                .andExpect(jsonPath("$.status").value(423));
+    }
+
+    // ─── resend-otp endpoint ──────────────────────────────────────────────────────
+
+    @Test
+    void resendOtp_validRequest_returns200() throws Exception {
+        when(authService.resendOtp(any()))
+                .thenReturn(new ResendOtpResponse("If this email is registered and unverified, a new code has been sent."));
+
+        mockMvc.perform(post("/api/auth/resend-otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"prince@example.com"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").exists());
+    }
+
+    @Test
+    void resendOtp_tooSoon_returns429WithRetryAfterHeader() throws Exception {
+        when(authService.resendOtp(any())).thenThrow(new OtpResendTooSoonException(45));
+
+        mockMvc.perform(post("/api/auth/resend-otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"prince@example.com"}
+                                """))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "45"))
+                .andExpect(jsonPath("$.status").value(429));
+    }
+
+    @Test
+    void resendOtp_blankEmail_returns400() throws Exception {
+        mockMvc.perform(post("/api/auth/resend-otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":""}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void resendOtp_invalidEmail_returns400() throws Exception {
+        mockMvc.perform(post("/api/auth/resend-otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"not-an-email"}
+                                """))
+                .andExpect(status().isBadRequest());
     }
 
     /** A well-formed but already-expired HS256 token signed with the test secret. */

@@ -58,4 +58,16 @@ public class AuthController {
         authService.logout(request.refreshToken());
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/verify-email")
+    @Operation(summary = "Verify email address using a 6-digit OTP")
+    public ResponseEntity<VerifyEmailResponse> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        return ResponseEntity.ok(authService.verifyEmail(request));
+    }
+
+    @PostMapping("/resend-otp")
+    @Operation(summary = "Request a new OTP verification code")
+    public ResponseEntity<ResendOtpResponse> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
+        return ResponseEntity.ok(authService.resendOtp(request));
+    }
 }

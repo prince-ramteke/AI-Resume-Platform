@@ -59,9 +59,16 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(401, "Unauthorized", ex.getMessage(), traceId()));
     }
 
-    @ExceptionHandler({TooManyOtpAttemptsException.class, OtpResendTooSoonException.class})
-    public ResponseEntity<ErrorResponse> handleOtpRateLimit(RuntimeException ex) {
+    @ExceptionHandler(TooManyOtpAttemptsException.class)
+    public ResponseEntity<ErrorResponse> handleTooManyOtpAttempts(TooManyOtpAttemptsException ex) {
+        return ResponseEntity.status(HttpStatus.LOCKED)
+                .body(ErrorResponse.of(423, "Locked", ex.getMessage(), traceId()));
+    }
+
+    @ExceptionHandler(OtpResendTooSoonException.class)
+    public ResponseEntity<ErrorResponse> handleOtpResendTooSoon(OtpResendTooSoonException ex) {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
                 .body(ErrorResponse.of(429, "Too Many Requests", ex.getMessage(), traceId()));
     }
 

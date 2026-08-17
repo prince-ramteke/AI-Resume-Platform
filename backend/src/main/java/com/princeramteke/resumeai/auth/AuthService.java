@@ -4,6 +4,9 @@ import com.princeramteke.resumeai.auth.dto.*;
 import com.princeramteke.resumeai.auth.exception.EmailAlreadyExistsException;
 import com.princeramteke.resumeai.auth.exception.EmailNotVerifiedException;
 import com.princeramteke.resumeai.auth.exception.InvalidCredentialsException;
+import com.princeramteke.resumeai.auth.exception.OtpInvalidException;
+import com.princeramteke.resumeai.auth.exception.OtpResendTooSoonException;
+import com.princeramteke.resumeai.auth.exception.TooManyOtpAttemptsException;
 import com.princeramteke.resumeai.config.FeatureFlags;
 import com.princeramteke.resumeai.config.OtpConfig;
 import com.princeramteke.resumeai.security.JwtTokenProvider;
@@ -18,9 +21,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -168,6 +173,76 @@ public class AuthService {
         refreshTokenRepository.save(storedToken);
 
         log.info("User logged out: id={}", storedToken.getUser().getId());
+    }
+
+    // noRollbackFor ensures incrementAttemptCount() is committed even when the method throws.
+    // Without it, Spring's default behaviour rolls back the entire transaction on RuntimeException,
+    // silently discarding the counter and allowing unlimited retries.
+    @Transactional(noRollbackFor = {OtpInvalidException.class, TooManyOtpAttemptsException.class})
+    public VerifyEmailResponse verifyEmail(VerifyEmailRequest request) {
+        // Anti-enumeration: same error for unknown email and wrong OTP.
+        User user = userRepository.findByEmail(request.email())
+                .orElseThrow(OtpInvalidException::new);
+
+        Instant now = Instant.now();
+
+        // Include locked records (attemptCount >= max) so we can return 423 instead of 401
+        // for an account that is locked but not yet expired.
+        EmailVerification verification = emailVerificationRepository
+                .findLatestNotExpiredNotUsedByUserId(user.getId(), now)
+                .orElseThrow(OtpInvalidException::new);
+
+        if (verification.getAttemptCount() >= otpConfig.maxAttempts()) {
+            throw new TooManyOtpAttemptsException();
+        }
+
+        // Constant-time comparison prevents timing attacks on the OTP.
+        byte[] storedHash = verification.getOtpHash().getBytes(StandardCharsets.UTF_8);
+        byte[] inputHash = sha256(request.otp()).getBytes(StandardCharsets.UTF_8);
+        if (!MessageDigest.isEqual(storedHash, inputHash)) {
+            verification.incrementAttemptCount();
+            emailVerificationRepository.save(verification);
+            if (verification.getAttemptCount() >= otpConfig.maxAttempts()) {
+                throw new TooManyOtpAttemptsException();
+            }
+            throw new OtpInvalidException();
+        }
+
+        verification.markUsed();
+        emailVerificationRepository.save(verification);
+        user.setEmailVerified(true);
+        userRepository.save(user);
+
+        log.info("Email verified for user: id={}", user.getId());
+        return new VerifyEmailResponse("Email verified successfully");
+    }
+
+    @Transactional
+    public ResendOtpResponse resendOtp(ResendOtpRequest request) {
+        Optional<User> userOpt = userRepository.findByEmail(request.email());
+
+        // Anti-enumeration: identical response for unknown email and already-verified account.
+        if (userOpt.isEmpty() || userOpt.get().isEmailVerified()) {
+            return new ResendOtpResponse("If this email is registered and unverified, a new code has been sent.");
+        }
+
+        User user = userOpt.get();
+
+        // Enforce cooldown from the most recent verification's creation timestamp.
+        emailVerificationRepository.findMostRecentByUserId(user.getId()).ifPresent(recent -> {
+            Instant cooldownEnds = recent.getCreatedAt().plus(otpConfig.resendCooldownSeconds(), ChronoUnit.SECONDS);
+            if (Instant.now().isBefore(cooldownEnds)) {
+                long remaining = Math.max(1, Duration.between(Instant.now(), cooldownEnds).getSeconds());
+                throw new OtpResendTooSoonException((int) remaining);
+            }
+        });
+
+        String otp = generateOtp();
+        Instant expiresAt = Instant.now().plus(otpConfig.expiryMinutes(), ChronoUnit.MINUTES);
+        emailVerificationRepository.save(new EmailVerification(user, sha256(otp), expiresAt));
+
+        log.info("OTP record created for resend: user id={}", user.getId());
+        return new ResendOtpResponse("If this email is registered and unverified, a new code has been sent.");
     }
 
     private String[] generateRefreshToken(User user, String familyId) {
