@@ -117,3 +117,15 @@ app:
       base-url: ${OPENAI_BASE_URL:https://api.openai.com}
       model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
       api-key: ${OPENAI_API_KEY:}
+  feature:
+    # All flags default to false. Local development works without any external dependencies.
+    # Enable each flag independently in Render via the corresponding environment variable.
+    email-verification-enabled: ${EMAIL_VERIFICATION_ENABLED:false}
+    google-oauth-enabled: ${GOOGLE_OAUTH_ENABLED:false}
+    notification-enabled: ${NOTIFICATION_ENABLED:false}
+  notification:
+    # Resend transactional email — leave empty until the notification feature is enabled.
+    # The notificationEnabled flag prevents outbound calls when these are unset.
+    resend-api-key: ${RESEND_API_KEY:}
+    sender-address: ${NOTIFICATION_SENDER_ADDRESS:}
+    admin-email: ${NOTIFICATION_ADMIN_EMAIL:}
