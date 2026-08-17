@@ -11,6 +11,7 @@ import { AppRoot } from "./app/AppRoot";
 import { AppShell } from "./app/shell/AppShell";
 import { LoginPage } from "./app/pages/auth/LoginPage";
 import { RegisterPage } from "./app/pages/auth/RegisterPage";
+import { VerifyEmailPage } from "./app/pages/auth/VerifyEmailPage";
 import { DashboardPage } from "./app/pages/DashboardPage";
 import { ResumeLibraryPage } from "./app/pages/ResumeLibraryPage";
 import { ResumeDetailPage } from "./app/pages/ResumeDetailPage";
@@ -54,6 +55,7 @@ function App() {
         <Route element={<AuthRootLayout />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
         </Route>
       </Route>
 

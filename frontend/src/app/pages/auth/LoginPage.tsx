@@ -12,6 +12,7 @@ export function LoginPage() {
   const { submit, isSubmitting, error } = useLogin();
   const [params] = useSearchParams();
   const justRegistered = params.get("registered") === "1";
+  const justVerified = params.get("verified") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -49,7 +50,12 @@ export function LoginPage() {
           Sign in to open your workspace and continue where you left off.
         </p>
 
-        {justRegistered && (
+        {justVerified && (
+          <div style={{ marginTop: 24, padding: "12px 14px", border: "1px solid var(--signal-pass)", color: "var(--signal-pass)", borderRadius: "var(--r-control)", fontFamily: "var(--font-mono)", fontSize: 12.5, letterSpacing: ".02em" }}>
+            Email verified. Sign in to continue.
+          </div>
+        )}
+        {!justVerified && justRegistered && (
           <div style={{ marginTop: 24, padding: "12px 14px", border: "1px solid var(--signal-pass)", color: "var(--signal-pass)", borderRadius: "var(--r-control)", fontFamily: "var(--font-mono)", fontSize: 12.5, letterSpacing: ".02em" }}>
             Account created. Sign in with your new credentials.
           </div>

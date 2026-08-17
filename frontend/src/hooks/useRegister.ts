@@ -25,8 +25,12 @@ export function useRegister() {
     setIsSubmitting(true);
     setError(null);
     try {
-      await registerRequest({ email, password });
-      navigate("/login?registered=1", { replace: true });
+      const response = await registerRequest({ email, password });
+      if (response.emailVerificationRequired) {
+        navigate(`/verify-email?email=${encodeURIComponent(email.trim())}`, { replace: true });
+      } else {
+        navigate("/login?registered=1", { replace: true });
+      }
     } catch (err) {
       const { status, message } = parseApiError(err);
       if (status === 409) {

@@ -11,6 +11,29 @@ export interface RegisterResponse {
   id: number;
   email: string;
   role: Role;
+  /** Present (and true) when EMAIL_VERIFICATION_ENABLED=true on the backend. */
+  emailVerificationRequired?: boolean;
+}
+
+/** POST /api/auth/verify-email request body. */
+export interface VerifyEmailRequest {
+  email: string;
+  otp: string;
+}
+
+/** POST /api/auth/verify-email 200 response. */
+export interface VerifyEmailResponse {
+  message: string;
+}
+
+/** POST /api/auth/resend-otp request body. */
+export interface ResendOtpRequest {
+  email: string;
+}
+
+/** POST /api/auth/resend-otp 200 response. */
+export interface ResendOtpResponse {
+  message: string;
 }
 
 /** POST /api/auth/login request body. */

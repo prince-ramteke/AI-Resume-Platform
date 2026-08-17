@@ -5,6 +5,10 @@ import type {
   MeResponse,
   RegisterRequest,
   RegisterResponse,
+  ResendOtpRequest,
+  ResendOtpResponse,
+  VerifyEmailRequest,
+  VerifyEmailResponse,
 } from "../types/auth";
 
 /** POST /api/auth/register — creates a user. Returns no token (no auto-login). */
@@ -51,4 +55,16 @@ export async function refresh(refreshToken: string): Promise<LoginResponse> {
 /** POST /api/auth/logout — revokes the refresh token server-side. */
 export async function logout(refreshToken: string): Promise<void> {
   await apiClient.post("/auth/logout", { refreshToken });
+}
+
+/** POST /api/auth/verify-email — consumes a one-time OTP and marks the account verified. */
+export async function verifyEmail(body: VerifyEmailRequest): Promise<VerifyEmailResponse> {
+  const { data } = await apiClient.post<VerifyEmailResponse>("/auth/verify-email", body);
+  return data;
+}
+
+/** POST /api/auth/resend-otp — sends a fresh OTP to an unverified address. */
+export async function resendOtp(body: ResendOtpRequest): Promise<ResendOtpResponse> {
+  const { data } = await apiClient.post<ResendOtpResponse>("/auth/resend-otp", body);
+  return data;
 }
