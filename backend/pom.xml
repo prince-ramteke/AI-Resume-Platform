@@ -207,6 +207,7 @@
                          would fail if activated here. -->
                     <includes>
                         <include>**/OtpTransactionIT.java</include>
+                        <include>**/EmailDeliveryFailureIT.java</include>
                     </includes>
                     <!-- docker-java defaults to API version v1.32 in versioned URL paths.
                          Docker Desktop 4.x (engine 29.x) requires minimum v1.40; requests

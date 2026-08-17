@@ -12,6 +12,9 @@ import com.princeramteke.resumeai.auth.exception.OtpResendTooSoonException;
 import com.princeramteke.resumeai.auth.exception.TooManyOtpAttemptsException;
 import com.princeramteke.resumeai.config.FeatureFlags;
 import com.princeramteke.resumeai.config.OtpConfig;
+import com.princeramteke.resumeai.notification.EmailService;
+import com.princeramteke.resumeai.notification.event.UserRegisteredEvent;
+import com.princeramteke.resumeai.notification.event.UserVerifiedEvent;
 import com.princeramteke.resumeai.security.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.nio.charset.StandardCharsets;
@@ -28,9 +32,12 @@ import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.assertj.core.api.InstanceOfAssertFactories.INTEGER;
 
@@ -42,10 +49,13 @@ class AuthServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private JwtTokenProvider tokenProvider;
     @Mock private EmailVerificationRepository emailVerificationRepository;
+    @Mock private EmailService emailService;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     // These are value objects — created directly rather than mocked.
-    private static final FeatureFlags FLAGS_OFF = new FeatureFlags(false, false, false);
-    private static final FeatureFlags FLAGS_EMAIL_ON = new FeatureFlags(true, false, false);
+    private static final FeatureFlags FLAGS_OFF       = new FeatureFlags(false, false, false);
+    private static final FeatureFlags FLAGS_EMAIL_ON  = new FeatureFlags(true,  false, false);
+    private static final FeatureFlags FLAGS_BOTH_ON   = new FeatureFlags(true,  false, true);
     private static final OtpConfig OTP_CONFIG = new OtpConfig(10, 5, 60);
 
     private AuthService authService;
@@ -53,7 +63,8 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         authService = new AuthService(userRepository, refreshTokenRepository, passwordEncoder,
-                tokenProvider, 7, FLAGS_OFF, OTP_CONFIG, emailVerificationRepository);
+                tokenProvider, 7, FLAGS_OFF, OTP_CONFIG, emailVerificationRepository,
+                emailService, eventPublisher);
     }
 
     // ─── Register — flag OFF ──────────────────────────────────────────────────
@@ -106,7 +117,8 @@ class AuthServiceTest {
     @Test
     void register_flagOn_createsUnverifiedUserAndOtpRecord() {
         var service = new AuthService(userRepository, refreshTokenRepository, passwordEncoder,
-                tokenProvider, 7, FLAGS_EMAIL_ON, OTP_CONFIG, emailVerificationRepository);
+                tokenProvider, 7, FLAGS_EMAIL_ON, OTP_CONFIG, emailVerificationRepository,
+                emailService, eventPublisher);
 
         var request = new RegisterRequest("new@example.com", "StrongPass1", "Alice", null);
         when(userRepository.existsByEmail("new@example.com")).thenReturn(false);
@@ -190,7 +202,8 @@ class AuthServiceTest {
     @Test
     void login_flagOn_unverifiedLocalUser_throwsEmailNotVerified() {
         var service = new AuthService(userRepository, refreshTokenRepository, passwordEncoder,
-                tokenProvider, 7, FLAGS_EMAIL_ON, OTP_CONFIG, emailVerificationRepository);
+                tokenProvider, 7, FLAGS_EMAIL_ON, OTP_CONFIG, emailVerificationRepository,
+                emailService, eventPublisher);
 
         var request = new LoginRequest("unverified@example.com", "StrongPass1");
         var user = new User("unverified@example.com", "$2a$10$hashed");
@@ -206,7 +219,8 @@ class AuthServiceTest {
     @Test
     void login_flagOn_verifiedLocalUser_succeeds() {
         var service = new AuthService(userRepository, refreshTokenRepository, passwordEncoder,
-                tokenProvider, 7, FLAGS_EMAIL_ON, OTP_CONFIG, emailVerificationRepository);
+                tokenProvider, 7, FLAGS_EMAIL_ON, OTP_CONFIG, emailVerificationRepository,
+                emailService, eventPublisher);
 
         var request = new LoginRequest("verified@example.com", "StrongPass1");
         var user = new User("verified@example.com", "$2a$10$hashed");
@@ -494,11 +508,142 @@ class AuthServiceTest {
         verify(emailVerificationRepository).save(any(EmailVerification.class));
     }
 
+    // ─── Phase 5 — email delivery and event publishing ────────────────────────
+
+    @Test
+    void register_alwaysPublishesUserRegisteredEvent() {
+        // Even with all flags off, UserRegisteredEvent must be published so the admin
+        // notification listener can fire when notifications are later enabled.
+        var request = new RegisterRequest("prince@example.com", "StrongPass1", null, null);
+        when(userRepository.existsByEmail("prince@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("StrongPass1")).thenReturn("$2a$10$hashed");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User u = invocation.getArgument(0);
+            var saved = new User(u.getEmail(), u.getPasswordHash());
+            try {
+                var f = User.class.getDeclaredField("id");
+                f.setAccessible(true);
+                f.set(saved, 1L);
+            } catch (Exception ignored) {}
+            return saved;
+        });
+
+        authService.register(request);
+
+        ArgumentCaptor<UserRegisteredEvent> captor = ArgumentCaptor.forClass(UserRegisteredEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().getEmail()).isEqualTo("prince@example.com");
+    }
+
+    @Test
+    void register_bothFlagsOn_sendsOtpEmailAndPublishesRegistrationEvent() {
+        var service = serviceWithBothFlagsOn();
+        var request = new RegisterRequest("alice@example.com", "StrongPass1", "Alice", "Smith");
+        when(userRepository.existsByEmail("alice@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("StrongPass1")).thenReturn("$2a$10$hashed");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User u = invocation.getArgument(0);
+            var saved = new User(u.getEmail(), u.getPasswordHash());
+            saved.setFirstName(u.getFirstName());
+            saved.setLastName(u.getLastName());
+            try {
+                var f = User.class.getDeclaredField("id");
+                f.setAccessible(true);
+                f.set(saved, 99L);
+            } catch (Exception ignored) {}
+            return saved;
+        });
+
+        var response = service.register(request);
+
+        assertThat(response.emailVerificationRequired()).isTrue();
+
+        ArgumentCaptor<String> otpCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendOtpEmail(eq("alice@example.com"), eq("Alice"), otpCaptor.capture(), eq(10));
+        assertThat(otpCaptor.getValue()).matches("\\d{6}");
+
+        ArgumentCaptor<UserRegisteredEvent> eventCaptor = ArgumentCaptor.forClass(UserRegisteredEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getEmail()).isEqualTo("alice@example.com");
+        assertThat(eventCaptor.getValue().getFirstName()).isEqualTo("Alice");
+    }
+
+    @Test
+    void register_otpEmailFailure_doesNotFailRegistration() {
+        var service = serviceWithBothFlagsOn();
+        var request = new RegisterRequest("alice@example.com", "StrongPass1", "Alice", null);
+        when(userRepository.existsByEmail("alice@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("StrongPass1")).thenReturn("$2a$10$hashed");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User u = invocation.getArgument(0);
+            var saved = new User(u.getEmail(), u.getPasswordHash());
+            saved.setFirstName(u.getFirstName());
+            try {
+                var f = User.class.getDeclaredField("id");
+                f.setAccessible(true);
+                f.set(saved, 99L);
+            } catch (Exception ignored) {}
+            return saved;
+        });
+        doThrow(new RuntimeException("Resend API down"))
+                .when(emailService).sendOtpEmail(any(), any(), any(), anyInt());
+
+        assertThatCode(() -> service.register(request)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void register_notificationDisabled_neverCallsEmailService() {
+        // FLAGS_EMAIL_ON has notification=false → emailService must never be called
+        var service = serviceWithEmailFlagOn();
+        var request = new RegisterRequest("alice@example.com", "StrongPass1", null, null);
+        when(userRepository.existsByEmail("alice@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("StrongPass1")).thenReturn("$2a$10$hashed");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User u = invocation.getArgument(0);
+            var saved = new User(u.getEmail(), u.getPasswordHash());
+            try {
+                var f = User.class.getDeclaredField("id");
+                f.setAccessible(true);
+                f.set(saved, 99L);
+            } catch (Exception ignored) {}
+            return saved;
+        });
+
+        service.register(request);
+        verifyNoInteractions(emailService);
+    }
+
+    @Test
+    void verifyEmail_correctOtp_publishesUserVerifiedEvent() {
+        var service = serviceWithEmailFlagOn();
+        var user = userWithId(10L, "alice@example.com");
+        var otp = "482931";
+        var verification = new EmailVerification(user, sha256(otp), Instant.now().plusSeconds(600));
+
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
+        when(emailVerificationRepository.findLatestNotExpiredNotUsedByUserId(any(Long.class), any(Instant.class)))
+                .thenReturn(Optional.of(verification));
+
+        service.verifyEmail(new VerifyEmailRequest("alice@example.com", otp));
+
+        ArgumentCaptor<UserVerifiedEvent> captor = ArgumentCaptor.forClass(UserVerifiedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().getEmail()).isEqualTo("alice@example.com");
+        assertThat(captor.getValue().getUserId()).isEqualTo(10L);
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private AuthService serviceWithEmailFlagOn() {
         return new AuthService(userRepository, refreshTokenRepository, passwordEncoder,
-                tokenProvider, 7, FLAGS_EMAIL_ON, OTP_CONFIG, emailVerificationRepository);
+                tokenProvider, 7, FLAGS_EMAIL_ON, OTP_CONFIG, emailVerificationRepository,
+                emailService, eventPublisher);
+    }
+
+    private AuthService serviceWithBothFlagsOn() {
+        return new AuthService(userRepository, refreshTokenRepository, passwordEncoder,
+                tokenProvider, 7, FLAGS_BOTH_ON, OTP_CONFIG, emailVerificationRepository,
+                emailService, eventPublisher);
     }
 
     private String sha256(String input) {

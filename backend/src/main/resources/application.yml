@@ -133,3 +133,5 @@ app:
     resend-api-key: ${RESEND_API_KEY:}
     sender-address: ${NOTIFICATION_SENDER_ADDRESS:}
     admin-email: ${NOTIFICATION_ADMIN_EMAIL:}
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+    resend-base-url: ${RESEND_BASE_URL:https://api.resend.com}

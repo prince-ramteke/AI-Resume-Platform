@@ -9,10 +9,14 @@ import com.princeramteke.resumeai.auth.exception.OtpResendTooSoonException;
 import com.princeramteke.resumeai.auth.exception.TooManyOtpAttemptsException;
 import com.princeramteke.resumeai.config.FeatureFlags;
 import com.princeramteke.resumeai.config.OtpConfig;
+import com.princeramteke.resumeai.notification.EmailService;
+import com.princeramteke.resumeai.notification.event.UserRegisteredEvent;
+import com.princeramteke.resumeai.notification.event.UserVerifiedEvent;
 import com.princeramteke.resumeai.security.JwtTokenProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +46,8 @@ public class AuthService {
     private final FeatureFlags featureFlags;
     private final OtpConfig otpConfig;
     private final EmailVerificationRepository emailVerificationRepository;
+    private final EmailService emailService;
+    private final ApplicationEventPublisher eventPublisher;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public AuthService(UserRepository userRepository,
@@ -51,7 +57,9 @@ public class AuthService {
                        @Value("${app.jwt.refresh-expiry-days:7}") int refreshTokenExpiryDays,
                        FeatureFlags featureFlags,
                        OtpConfig otpConfig,
-                       EmailVerificationRepository emailVerificationRepository) {
+                       EmailVerificationRepository emailVerificationRepository,
+                       EmailService emailService,
+                       ApplicationEventPublisher eventPublisher) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
@@ -60,6 +68,8 @@ public class AuthService {
         this.featureFlags = featureFlags;
         this.otpConfig = otpConfig;
         this.emailVerificationRepository = emailVerificationRepository;
+        this.emailService = emailService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -82,13 +92,24 @@ public class AuthService {
         user = userRepository.save(user);
 
         if (requiresVerification) {
-            // Generate and store an OTP record. Email delivery is deferred to Phase 4/5.
             String otp = generateOtp();
             String otpHash = sha256(otp);
             Instant expiresAt = Instant.now().plus(otpConfig.expiryMinutes(), ChronoUnit.MINUTES);
             emailVerificationRepository.save(new EmailVerification(user, otpHash, expiresAt));
+
+            if (featureFlags.notificationEnabled()) {
+                try {
+                    emailService.sendOtpEmail(user.getEmail(), user.getFirstName(), otp, otpConfig.expiryMinutes());
+                } catch (Exception ex) {
+                    log.warn("OTP email delivery failed for userId={}: {}", user.getId(), ex.getMessage());
+                }
+            }
             log.info("Email verification required for user: id={}", user.getId());
         }
+
+        // Admin notification fires AFTER_COMMIT in a separate async thread.
+        eventPublisher.publishEvent(new UserRegisteredEvent(this, user.getId(), user.getEmail(),
+                user.getFirstName(), user.getLastName(), user.getAuthProvider().name()));
 
         log.info("User registered: id={}", user.getId());
         return new RegisterResponse(user.getId(), user.getEmail(), user.getRole().name(), requiresVerification);
@@ -213,6 +234,9 @@ public class AuthService {
         user.setEmailVerified(true);
         userRepository.save(user);
 
+        // Welcome email fires AFTER_COMMIT in a separate async thread.
+        eventPublisher.publishEvent(new UserVerifiedEvent(this, user.getId(), user.getEmail(), user.getFirstName()));
+
         log.info("Email verified for user: id={}", user.getId());
         return new VerifyEmailResponse("Email verified successfully");
     }
@@ -241,6 +265,13 @@ public class AuthService {
         Instant expiresAt = Instant.now().plus(otpConfig.expiryMinutes(), ChronoUnit.MINUTES);
         emailVerificationRepository.save(new EmailVerification(user, sha256(otp), expiresAt));
 
+        if (featureFlags.notificationEnabled()) {
+            try {
+                emailService.sendOtpEmail(user.getEmail(), user.getFirstName(), otp, otpConfig.expiryMinutes());
+            } catch (Exception ex) {
+                log.warn("OTP resend email delivery failed for userId={}: {}", user.getId(), ex.getMessage());
+            }
+        }
         log.info("OTP record created for resend: user id={}", user.getId());
         return new ResendOtpResponse("If this email is registered and unverified, a new code has been sent.");
     }
