@@ -13,6 +13,12 @@ public record RegisterRequest(
         @Size(min = 8, message = "must be at least 8 characters")
         @Pattern(regexp = ".*[a-zA-Z].*", message = "must contain at least one letter")
         @Pattern(regexp = ".*\\d.*", message = "must contain at least one digit")
-        String password
+        String password,
+
+        @Size(max = 100)
+        String firstName,
+
+        @Size(max = 100)
+        String lastName
 ) {
 }

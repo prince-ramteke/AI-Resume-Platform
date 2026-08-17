@@ -117,6 +117,10 @@ app:
       base-url: ${OPENAI_BASE_URL:https://api.openai.com}
       model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
       api-key: ${OPENAI_API_KEY:}
+  otp:
+    expiry-minutes: ${OTP_EXPIRY_MINUTES:10}
+    max-attempts: ${OTP_MAX_ATTEMPTS:5}
+    resend-cooldown-seconds: ${OTP_RESEND_COOLDOWN_SECONDS:60}
   feature:
     # All flags default to false. Local development works without any external dependencies.
     # Enable each flag independently in Render via the corresponding environment variable.

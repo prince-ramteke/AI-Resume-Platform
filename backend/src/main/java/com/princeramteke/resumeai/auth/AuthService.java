@@ -2,7 +2,10 @@ package com.princeramteke.resumeai.auth;
 
 import com.princeramteke.resumeai.auth.dto.*;
 import com.princeramteke.resumeai.auth.exception.EmailAlreadyExistsException;
+import com.princeramteke.resumeai.auth.exception.EmailNotVerifiedException;
 import com.princeramteke.resumeai.auth.exception.InvalidCredentialsException;
+import com.princeramteke.resumeai.config.FeatureFlags;
+import com.princeramteke.resumeai.config.OtpConfig;
 import com.princeramteke.resumeai.security.JwtTokenProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,18 +34,27 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
     private final int refreshTokenExpiryDays;
+    private final FeatureFlags featureFlags;
+    private final OtpConfig otpConfig;
+    private final EmailVerificationRepository emailVerificationRepository;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public AuthService(UserRepository userRepository,
                        RefreshTokenRepository refreshTokenRepository,
                        PasswordEncoder passwordEncoder,
                        JwtTokenProvider tokenProvider,
-                       @Value("${app.jwt.refresh-expiry-days:7}") int refreshTokenExpiryDays) {
+                       @Value("${app.jwt.refresh-expiry-days:7}") int refreshTokenExpiryDays,
+                       FeatureFlags featureFlags,
+                       OtpConfig otpConfig,
+                       EmailVerificationRepository emailVerificationRepository) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
         this.refreshTokenExpiryDays = refreshTokenExpiryDays;
+        this.featureFlags = featureFlags;
+        this.otpConfig = otpConfig;
+        this.emailVerificationRepository = emailVerificationRepository;
     }
 
     @Transactional
@@ -52,10 +64,29 @@ public class AuthService {
         }
 
         var user = new User(request.email(), passwordEncoder.encode(request.password()));
+        user.setFirstName(request.firstName());
+        user.setLastName(request.lastName());
+
+        boolean requiresVerification = featureFlags.emailVerificationEnabled();
+        if (!requiresVerification) {
+            // Flag off: new LOCAL accounts are immediately considered verified,
+            // preserving the pre-verification-feature behavior.
+            user.setEmailVerified(true);
+        }
+
         user = userRepository.save(user);
 
+        if (requiresVerification) {
+            // Generate and store an OTP record. Email delivery is deferred to Phase 4/5.
+            String otp = generateOtp();
+            String otpHash = sha256(otp);
+            Instant expiresAt = Instant.now().plus(otpConfig.expiryMinutes(), ChronoUnit.MINUTES);
+            emailVerificationRepository.save(new EmailVerification(user, otpHash, expiresAt));
+            log.info("Email verification required for user: id={}", user.getId());
+        }
+
         log.info("User registered: id={}", user.getId());
-        return new RegisterResponse(user.getId(), user.getEmail(), user.getRole().name());
+        return new RegisterResponse(user.getId(), user.getEmail(), user.getRole().name(), requiresVerification);
     }
 
     @Transactional
@@ -63,8 +94,16 @@ public class AuthService {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(InvalidCredentialsException::new);
 
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        // Null guard covers Google-only accounts that have no password hash.
+        if (user.getPasswordHash() == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new InvalidCredentialsException();
+        }
+
+        // Block unverified LOCAL accounts when the email-verification gate is active.
+        if (featureFlags.emailVerificationEnabled()
+                && !user.isEmailVerified()
+                && user.getAuthProvider() == AuthProvider.LOCAL) {
+            throw new EmailNotVerifiedException(user.getEmail());
         }
 
         String accessToken = tokenProvider.generateToken(user.getId(), user.getEmail(), user.getRole().name());
@@ -83,7 +122,8 @@ public class AuthService {
     public UserResponse getCurrentUser(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(InvalidCredentialsException::new);
-        return new UserResponse(user.getId(), user.getEmail(), user.getRole().name());
+        return new UserResponse(user.getId(), user.getEmail(), user.getRole().name(),
+                user.isEmailVerified(), user.getAuthProvider().name());
     }
 
     @Transactional
@@ -145,7 +185,13 @@ public class AuthService {
         return new String[]{token, expiresAt.toString()};
     }
 
-    private String sha256(String input) {
+    private String generateOtp() {
+        // 6-digit code in range [100000, 999999]
+        int otp = 100_000 + secureRandom.nextInt(900_000);
+        return String.valueOf(otp);
+    }
+
+    String sha256(String input) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));

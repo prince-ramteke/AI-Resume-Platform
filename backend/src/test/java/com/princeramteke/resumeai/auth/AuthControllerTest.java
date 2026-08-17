@@ -5,6 +5,7 @@ import com.princeramteke.resumeai.auth.exception.EmailAlreadyExistsException;
 import com.princeramteke.resumeai.auth.exception.InvalidCredentialsException;
 import com.princeramteke.resumeai.common.exception.GlobalExceptionHandler;
 import com.princeramteke.resumeai.config.CorsConfig;
+import com.princeramteke.resumeai.config.FeatureFlags;
 import com.princeramteke.resumeai.config.JwtConfig;
 import com.princeramteke.resumeai.config.RateLimitProperties;
 import com.princeramteke.resumeai.config.SecurityConfig;
@@ -43,7 +44,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         JwtTokenProvider.class, JwtAuthenticationFilter.class,
         JwtAuthEntryPoint.class, JwtAccessDeniedHandler.class,
         GlobalExceptionHandler.class, AnalysisRateLimitFilter.class})
-@EnableConfigurationProperties({JwtConfig.class, RateLimitProperties.class})
+@EnableConfigurationProperties({JwtConfig.class, RateLimitProperties.class, FeatureFlags.class})
 @TestPropertySource(properties = {
         "app.cors.allowed-origins=http://localhost:5173",
         "app.jwt.secret=test-secret-that-is-at-least-32-characters-long-for-hmac",
@@ -62,7 +63,7 @@ class AuthControllerTest {
 
     @Test
     void register_validRequest_returns201() throws Exception {
-        var response = new RegisterResponse(1L, "prince@example.com", "USER");
+        var response = new RegisterResponse(1L, "prince@example.com", "USER", false);
         when(authService.register(any())).thenReturn(response);
 
         mockMvc.perform(post("/api/auth/register")
@@ -168,7 +169,7 @@ class AuthControllerTest {
     void me_validToken_returns200() throws Exception {
         String token = tokenProvider.generateToken(1L, "prince@example.com", "USER");
 
-        var response = new UserResponse(1L, "prince@example.com", "USER");
+        var response = new UserResponse(1L, "prince@example.com", "USER", true, "LOCAL");
         when(authService.getCurrentUser(1L)).thenReturn(response);
 
         mockMvc.perform(get("/api/auth/me")
