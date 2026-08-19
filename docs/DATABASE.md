@@ -219,11 +219,18 @@ Stored on `analyses` so the verdict stays flexible without extra tables.
 ## 6. Migrations
 
 - Use **Flyway**. Migrations in `backend/src/main/resources/db/migration/`.
-- `V1__init.sql` — pgvector extension + core tables (users, resumes, job_descriptions, document_chunks, analyses)
-- `V2__resume_metadata.sql` — adds resume metadata columns (content_type, file_size, file_path, page_count, language, deleted, updated_at) and partial index
-- `V3__job_description_metadata.sql` — adds JD metadata columns (content_type, file_size, file_path, page_count, language, deleted, updated_at) and indexes (partial on active, GIN on title)
-- `V6__document_chunks_fts.sql` — adds `idx_chunks_content_fts` (GIN full-text index on `content`) for the keyword arm of hybrid retrieval (v1.1)
-- Never edit an applied migration; add a new one.
+| Migration | Description |
+|---|---|
+| `V1__init.sql` | pgvector extension + core tables: users, resumes, job_descriptions, document_chunks, analyses |
+| `V2__resume_metadata.sql` | Adds content_type, file_size, file_path, page_count, language, deleted, updated_at to resumes; partial index on active resumes |
+| `V3__job_description_metadata.sql` | Same metadata columns for JDs; GIN index on title for full-text search |
+| `V4__analysis_cache_index.sql` | Composite index on `(user_id, resume_id, job_description_id, created_at DESC)` for cache lookups |
+| `V5__refresh_tokens.sql` | Adds refresh_tokens table with token_hash, family_id, revoked_at |
+| `V6__document_chunks_fts.sql` | GIN full-text index `idx_chunks_content_fts` on `to_tsvector('english', content)` for hybrid retrieval keyword arm |
+| `V7__embedding_dimension_1536.sql` | Widens vector column from 768→1536 and rebuilds HNSW index for OpenAI/Gemini cloud deployment |
+| `V8__email_verification_and_oauth.sql` | Adds email_verified, first_name, last_name, auth_provider columns to users; creates email_verifications table (OTP hash, attempt count, expiry); creates oauth_exchange_codes table (infrastructure-only; Google OAuth is not activated in v1) |
+
+**Rule:** never edit an applied migration; add a new one. Schema is the source of truth — entities use `ddl-auto: validate`.
 
 ---
 

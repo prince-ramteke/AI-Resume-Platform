@@ -11,7 +11,7 @@ Set up the skeleton before any feature.
 - Frontend Vite + React + TS skeleton.
 - `docker-compose.yml` with Postgres/pgvector + Ollama + backend + frontend.
 - Flyway wired; `V1__init.sql` creates the extension + core tables.
-- `.env.example`, `.gitignore`, README, this `docs/` set, `.claude/` rules & prompts.
+- `.env.example`, `.gitignore`, README, this `docs/` set.
 - GitHub Actions CI running an empty-but-green test.
 
 **DoD:** `docker-compose up` starts everything; `/actuator/health` is green; CI passes.

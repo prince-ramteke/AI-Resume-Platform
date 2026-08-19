@@ -59,6 +59,44 @@ GRAFANA_ADMIN_PASSWORD=admin
 
 Commit `.env.example` only. `.env` is git-ignored.
 
+### Full annotated variable reference
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DB_URL` | Yes | `jdbc:postgresql://postgres:5432/resumeai` | JDBC connection URL |
+| `DB_USER` | Yes | `resumeai` | Database username |
+| `DB_PASSWORD` | Yes | *(none)* | Database password |
+| `JWT_SECRET` | Yes | *(none)* | ≥256-bit random secret — `openssl rand -hex 32` |
+| `JWT_EXPIRY_MINUTES` | No | `60` | Access token lifetime in minutes |
+| `REFRESH_TOKEN_EXPIRY_DAYS` | No | `7` | Refresh token lifetime in days |
+| `LLM_PROVIDER` | No | `ollama` | `ollama` or `openai` |
+| `LLM_FALLBACK_ENABLED` | No | `true` | Retry via fallback provider on timeout/error |
+| `OLLAMA_BASE_URL` | No | `http://ollama:11434` | Ollama endpoint |
+| `OLLAMA_CHAT_MODEL` | No | `llama3.1:8b` | Chat model for Ollama |
+| `OPENAI_API_KEY` | Conditional | *(none)* | Required when `LLM_PROVIDER=openai` |
+| `OPENAI_CHAT_MODEL` | No | `gpt-4o-mini` | OpenAI chat model |
+| `EMBEDDING_PROVIDER` | No | `ollama` | `ollama`, `openai`, or `gemini` |
+| `EMBEDDING_DIMENSIONS` | No | `768` | Must match model and DB column (768 for Ollama, 1536 for OpenAI/Gemini) |
+| `RAG_CHUNK_SIZE` | No | `500` | Characters per chunk |
+| `RAG_CHUNK_OVERLAP` | No | `50` | Overlap between consecutive chunks |
+| `RAG_RETRIEVAL_TOP_K` | No | `8` | Chunks retrieved per analysis |
+| `RAG_HYBRID_ENABLED` | No | `true` | Enable RRF hybrid retrieval (vector + FTS) |
+| `RAG_HYBRID_CANDIDATE_POOL_SIZE` | No | `20` | Candidates per arm before RRF fusion |
+| `LLM_TEMPERATURE` | No | `0.0` | Deterministic scoring |
+| `LLM_SEED` | No | `42` | Reproducible output seed |
+| `LLM_MAX_PROMPT_TOKENS` | No | `3500` | Hard token budget for prompt assembly |
+| `ANALYSIS_RATE_LIMIT_CAPACITY` | No | `5` | Burst size for analysis rate limiter |
+| `ANALYSIS_RATE_LIMIT_REFILL_PERIOD` | No | `15m` | Refill period for rate limiter |
+| `EMAIL_VERIFICATION_ENABLED` | No | `false` | Require OTP verification before login |
+| `NOTIFICATION_ENABLED` | No | `false` | Enable Brevo transactional email delivery |
+| `BREVO_API_KEY` | Conditional | *(none)* | Required when `NOTIFICATION_ENABLED=true` |
+| `BREVO_SENDER_EMAIL` | Conditional | *(none)* | Verified sender address in Brevo |
+| `BREVO_SENDER_NAME` | No | `Resume Intelligence` | Display name in email From header |
+| `NOTIFICATION_ADMIN_EMAIL` | Yes (prod) | *(none)* | Admin inbox for registration notifications |
+| `FRONTEND_ORIGIN` | No | `http://localhost:5173` | CORS allowed origin |
+| `STORAGE_PATH` | No | `./uploads` | Local file storage directory |
+| `GRAFANA_ADMIN_PASSWORD` | No | `admin` | Grafana login (change for shared deployments) |
+
 ---
 
 ## 3. docker-compose.yml (services)

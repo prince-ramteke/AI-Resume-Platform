@@ -38,7 +38,38 @@
 
 ---
 
-## 2. Auth
+## 2. Endpoint Summary
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/auth/register` | Public | Register; sends OTP email via Brevo |
+| `POST` | `/api/auth/verify-email` | Public | Submit OTP to verify email |
+| `POST` | `/api/auth/resend-otp` | Public | Resend OTP (60 s cooldown) |
+| `POST` | `/api/auth/login` | Public | Login; returns access + refresh tokens |
+| `POST` | `/api/auth/refresh` | Public | Rotate refresh token; returns new pair |
+| `POST` | `/api/auth/logout` | Public | Revoke refresh token |
+| `GET` | `/api/auth/me` | JWT | Current user info |
+| `POST` | `/api/resumes` | JWT | Upload resume (PDF/DOCX, ≤ 10 MB) |
+| `GET` | `/api/resumes` | JWT | Paginated resume list |
+| `GET` | `/api/resumes/{id}` | JWT | Resume detail with extracted text |
+| `PUT` | `/api/resumes/{id}` | JWT | Replace resume file |
+| `DELETE` | `/api/resumes/{id}` | JWT | Soft-delete resume |
+| `GET` | `/api/resumes/{id}/download` | JWT | Download original file |
+| `POST` | `/api/job-descriptions` | JWT | Create JD from pasted text |
+| `POST` | `/api/job-descriptions/upload` | JWT | Create JD from file (PDF/DOCX/TXT) |
+| `GET` | `/api/job-descriptions` | JWT | Paginated JD list (optional `?search=`) |
+| `GET` | `/api/job-descriptions/{id}` | JWT | JD detail |
+| `PUT` | `/api/job-descriptions/{id}` | JWT | Update JD title/text |
+| `DELETE` | `/api/job-descriptions/{id}` | JWT | Soft-delete JD |
+| `POST` | `/api/analyses` | JWT | Run RAG analysis (rate-limited: 5/15 min) |
+| `GET` | `/api/analyses` | JWT | Paginated analysis history |
+| `GET` | `/api/analyses/{id}` | JWT | Full analysis result |
+| `GET` | `/api/admin/metrics` | ADMIN | Aggregate usage metrics |
+| `GET` | `/actuator/health` | Public | Liveness / readiness |
+
+---
+
+## 3. Auth
 
 ### POST /api/auth/register
 ```json

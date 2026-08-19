@@ -69,7 +69,32 @@ class FakeEmbeddingClient implements EmbeddingClient {
 
 ---
 
-## 5. Coverage targets
+## 5. Test counts (current)
+
+### Backend
+
+| Category | Count | What's covered |
+|---|---|---|
+| Unit test classes | 31 | Services, RAG steps (chunking, embedding, retrieval, prompt assembly, validation, parsing), mappers, JWT, rate-limit filter, file validators, email listeners, LLM clients |
+| Integration test classes (Testcontainers) | 3 | OTP transaction (full DB round-trip), email delivery failure resilience, Prometheus endpoint isolation |
+| Retrieval eval harness | 2 | 15-case Recall@K + MRR benchmark; `RetrievalTuningIT` sweeps RRF hyperparameters |
+
+### Frontend
+
+| Test file | What's covered |
+|---|---|
+| `api-client.test.tsx` | Axios client layer, token injection, error handling |
+| `validators.test.ts` | Email, password, and form field validators |
+| `ProtectedRoute.test.tsx` | Auth guard — redirects unauthenticated users to `/login?next=…` |
+| `LoginPage.test.tsx` | Form submission, error display, navigation |
+| `VerifyEmailPage.test.tsx` | OTP input, resend cooldown, success redirect |
+| `AnalysisResultPage.test.tsx` | Score dial render, skill badge display, evidence thread |
+
+Framework: **Vitest 4 + React Testing Library 16** + jsdom.
+
+---
+
+## 6. Coverage targets
 
 | Layer | Target |
 |---|---|
